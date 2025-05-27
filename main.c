@@ -520,6 +520,8 @@ static int parser_parse_defines(parser_t *parser, ds_dynamic_array *defines /* d
         token = parser_read(parser);
     }
 
+    return_defer(0);
+
 defer:
     return result;
 }
