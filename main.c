@@ -332,6 +332,7 @@ typedef struct define_t {
 
 typedef enum expression_kind_t {
     EXPRESSION_KIND_SET,
+    EXPRESSION_KIND_NAME,
     EXPRESSION_KIND_NUMBER,
     EXPRESSION_KIND_FUNCTION,
     EXPRESSION_KIND_OPERATOR,
@@ -339,17 +340,21 @@ typedef enum expression_kind_t {
 } expression_kind_t;
 
 typedef struct expression_set_t {
-    ds_string_slice value;
+    ds_dynamic_array items; /* expression_t */
 } expression_set_t;
+
+typedef struct expression_name_t {
+    ds_string_slice value;
+} expression_name_t;
 
 typedef struct expression_number_t {
     ds_string_slice value;
 } expression_number_t;
 
-typedef struct expression_name_t {
+typedef struct expression_function_t {
     ds_string_slice value;
     ds_dynamic_array args; /* expression_t */
-} expression_name_t;
+} expression_function_t;
 
 typedef struct expression_operator_t {
     ds_string_slice value;
@@ -365,8 +370,9 @@ typedef struct expression_t {
     expression_kind_t kind;
     union {
         expression_set_t set;
-        expression_number_t number;
         expression_name_t name;
+        expression_number_t number;
+        expression_function_t function;
         expression_operator_t operator;
         expression_paren_t paren;
     };
@@ -411,12 +417,89 @@ static void define_dump(define_t *define) {
     printf("\n");
 }
 
+static void expression_dump(expression_t *expression);
+
+static void expression_set_dump(expression_set_t *set) {
+    printf("<SET {");
+
+    for (unsigned int i = 0; i < set->items.count; i++) {
+        expression_t *arg_i = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&set->items, i, (void **)&arg_i));
+        expression_dump(arg_i);
+
+        if (i + 1 < set->items.count) printf(",");
+    }
+
+    printf("}>");
+}
+
+static void expression_name_dump(expression_name_t *name) {
+    printf("<NAME %.*s>", (int)name->value.len, name->value.str);
+}
+
+static void expression_number_dump(expression_number_t *number) {
+    printf("<NUMBER %.*s>", (int)number->value.len, number->value.str);
+}
+
+static void expression_function_dump(expression_function_t *function) {
+    printf("<FUNCTION %.*s>", (int)function->value.len, function->value.str);
+
+    if (function->args.count > 0) printf("(");
+    for (unsigned int i = 0; i < function->args.count; i++) {
+        expression_t *arg_i = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&function->args, i, (void **)&arg_i));
+        expression_dump(arg_i);
+
+        if (i + 1 < function->args.count) printf(",");
+    }
+    if (function->args.count > 0) printf(")");
+}
+
+static void expression_operator_dump(expression_operator_t *operator) {
+    expression_dump(operator->lhs);
+
+    printf(" <OPERATOR %.*s> ", (int)operator->value.len, operator->value.str);
+
+    expression_dump(operator->rhs);
+}
+
+static void expression_paren_dump(expression_paren_t *paren) {
+    printf(" <PAREN (");
+
+    expression_dump(paren->expr);
+
+    printf(")>");
+}
+
+static void expression_dump(expression_t *expression) {
+    switch (expression->kind) {
+    case EXPRESSION_KIND_SET: return expression_set_dump(&expression->set);
+    case EXPRESSION_KIND_NAME: return expression_name_dump(&expression->name);
+    case EXPRESSION_KIND_NUMBER: return expression_number_dump(&expression->number);
+    case EXPRESSION_KIND_FUNCTION: return expression_function_dump(&expression->function);
+    case EXPRESSION_KIND_OPERATOR: return expression_operator_dump(&expression->operator);
+    case EXPRESSION_KIND_PAREN: return expression_paren_dump(&expression->paren);
+    }
+}
+
+static void equality_dump(equality_t *equality) {
+    expression_dump(&equality->lhs);
+
+    printf(" = ");
+
+    expression_dump(&equality->rhs);
+
+    printf("\n");
+}
+
 static void statement_dump(statement_t *statement) {
     for (unsigned int i = 0; i < statement->defines.count; i++) {
         define_t *define = NULL;
         DS_UNREACHABLE(ds_dynamic_array_get_ref(&statement->defines, i, (void **)&define));
         define_dump(define);
     }
+
+    if (statement->equality != NULL) equality_dump(statement->equality);
 }
 
 static void program_dump(program_t *program) {
@@ -526,9 +609,198 @@ defer:
     return result;
 }
 
+static int parser_parse_expression(parser_t *parser, expression_t *expression) {
+    int result = 0;
+    token_t token = {0};
+
+    token = parser->tok;
+    if (token.kind == TOKEN_NUMBER) {
+        expression_number_t number = CLITERAL(expression_number_t){token.value};
+        token = parser_read(parser);
+
+        if (token.kind == TOKEN_OPERATOR) {
+            expression->kind = EXPRESSION_KIND_OPERATOR;
+            expression->operator = CLITERAL(expression_operator_t){token.value, NULL, NULL};
+
+            expression->operator.lhs = DS_MALLOC(NULL, sizeof(expression_t));
+            if (expression->operator.lhs == NULL) DS_PANIC(DS_ERROR_OOM);
+            expression->operator.lhs->kind = EXPRESSION_KIND_NUMBER;
+            expression->operator.lhs->number = number;
+
+            parser_read(parser);
+
+            expression->operator.rhs = DS_MALLOC(NULL, sizeof(expression_t));
+            if (expression->operator.rhs == NULL) DS_PANIC(DS_ERROR_OOM);
+            if (parser_parse_expression(parser, expression->operator.rhs) != 0) {
+                return_defer(1);
+            }
+        } else {
+            expression->kind = EXPRESSION_KIND_NUMBER;
+            expression->number = number;
+        }
+    } else if (token.kind == TOKEN_NAME) {
+        expression_function_t function = CLITERAL(expression_function_t){token.value, {0}};
+        ds_dynamic_array_init(&function.args, sizeof(expression_t));
+        token = parser_read(parser);
+
+        if (token.kind == TOKEN_LPAREN) {
+            do {
+                token = parser_read(parser);
+
+                expression_t arg = {0};
+                if (parser_parse_expression(parser, &arg) != 0) {
+                    return_defer(1);
+                }
+
+                DS_UNREACHABLE(ds_dynamic_array_append(&function.args, &arg));
+
+                token = parser->tok;
+                if (token.kind == TOKEN_COMMA) {
+                    continue;
+                } else if (token.kind == TOKEN_RPAREN) {
+                    break;
+                } else {
+                    int line, column;
+                    lexer_pos_to_lc(&parser->lexer, token.pos, &line, &column);
+                    DS_LOG_ERROR("Expected `,` or `)` but found %s at %d:%d", token_kind_to_string(token.kind), line, column);
+                    return_defer(1);
+                }
+            } while (true);
+
+            token = parser_read(parser);
+        }
+
+        if (token.kind == TOKEN_OPERATOR) {
+            expression->kind = EXPRESSION_KIND_OPERATOR;
+            expression->operator = CLITERAL(expression_operator_t){token.value, NULL, NULL};
+
+            expression->operator.lhs = DS_MALLOC(NULL, sizeof(expression_t));
+            if (expression->operator.lhs == NULL) DS_PANIC(DS_ERROR_OOM);
+            expression->operator.lhs->kind = EXPRESSION_KIND_FUNCTION;
+            expression->operator.lhs->function = function;
+
+            parser_read(parser);
+
+            expression->operator.rhs = DS_MALLOC(NULL, sizeof(expression_t));
+            if (expression->operator.rhs == NULL) DS_PANIC(DS_ERROR_OOM);
+            if (parser_parse_expression(parser, expression->operator.rhs) != 0) {
+                return_defer(1);
+            }
+        } else {
+            expression->kind = EXPRESSION_KIND_FUNCTION;
+            expression->function = function;
+        }
+    } else if (token.kind == TOKEN_SET) {
+        expression_name_t name = CLITERAL(expression_name_t){token.value};
+        token = parser_read(parser);
+
+        expression->kind = EXPRESSION_KIND_NAME;
+        expression->name = name;
+    } else if (token.kind == TOKEN_LBRACE) {
+        expression_set_t set = CLITERAL(expression_set_t){{0}};
+        ds_dynamic_array_init(&set.items, sizeof(expression_t));
+
+        do {
+            token = parser_read(parser);
+
+            expression_t item = {0};
+            if (parser_parse_expression(parser, &item) != 0) {
+                return_defer(1);
+            }
+
+            DS_UNREACHABLE(ds_dynamic_array_append(&set.items, &item));
+
+            token = parser->tok;
+            if (token.kind == TOKEN_COMMA) {
+                continue;
+            } else if (token.kind == TOKEN_RBRACE) {
+                break;
+            } else {
+                int line, column;
+                lexer_pos_to_lc(&parser->lexer, token.pos, &line, &column);
+                DS_LOG_ERROR("Expected `,` or `}` but found %s at %d:%d", token_kind_to_string(token.kind), line, column);
+                return_defer(1);
+            }
+        } while (true);
+
+        token = parser_read(parser);
+
+        expression->kind = EXPRESSION_KIND_SET;
+        expression->set = set;
+    } else if (token.kind == TOKEN_LPAREN) {
+        expression_paren_t paren = CLITERAL(expression_paren_t){NULL};
+        paren.expr = DS_MALLOC(NULL, sizeof(expression_t));
+        token = parser_read(parser);
+
+        if (parser_parse_expression(parser, paren.expr) != 0) {
+            return_defer(1);
+        }
+
+        token = parser->tok;
+        if (token.kind != TOKEN_RPAREN) {
+            int line, column;
+            lexer_pos_to_lc(&parser->lexer, token.pos, &line, &column);
+            DS_LOG_ERROR("Expected `)` but found %s at %d:%d", token_kind_to_string(token.kind), line, column);
+            return_defer(1);
+        }
+        token = parser_read(parser);
+
+        if (token.kind == TOKEN_OPERATOR) {
+            expression->kind = EXPRESSION_KIND_OPERATOR;
+            expression->operator = CLITERAL(expression_operator_t){token.value, NULL, NULL};
+
+            expression->operator.lhs = DS_MALLOC(NULL, sizeof(expression_t));
+            if (expression->operator.lhs == NULL) DS_PANIC(DS_ERROR_OOM);
+            expression->operator.lhs->kind = EXPRESSION_KIND_PAREN;
+            expression->operator.lhs->paren = paren;
+
+            parser_read(parser);
+
+            expression->operator.rhs = DS_MALLOC(NULL, sizeof(expression_t));
+            if (expression->operator.rhs == NULL) DS_PANIC(DS_ERROR_OOM);
+            if (parser_parse_expression(parser, expression->operator.rhs) != 0) {
+                return_defer(1);
+            }
+        } else {
+            expression->kind = EXPRESSION_KIND_PAREN;
+            expression->paren = paren;
+        }
+    } else {
+        int line, column;
+        lexer_pos_to_lc(&parser->lexer, token.pos, &line, &column);
+        DS_LOG_ERROR("Expected `{`, `(`, a symbol, a function, or a name but found %s at %d:%d", token_kind_to_string(token.kind), line, column);
+        return_defer(1);
+    }
+
+defer:
+    return result;
+}
+
 static int parser_parse_equality(parser_t *parser, equality_t *equality) {
-    // TODO: implement me
-    return 0;
+    int result = 0;
+    token_t token = {0};
+
+    if (parser_parse_expression(parser, &equality->lhs) != 0) {
+        // TODO: recover from error
+        return_defer(1);
+    }
+
+    token = parser->tok;
+    if (token.kind != TOKEN_EQUAL) {
+        int line, column;
+        lexer_pos_to_lc(&parser->lexer, token.pos, &line, &column);
+        DS_LOG_ERROR("Expected `=` but found %s at %d:%d", token_kind_to_string(token.kind), line, column);
+        return_defer(1);
+    }
+    token = parser_read(parser);
+
+    if (parser_parse_expression(parser, &equality->rhs) != 0) {
+        // TODO: recover from error
+        return_defer(1);
+    }
+
+defer:
+    return result;
 }
 
 static int parser_parse_statement(parser_t *parser, statement_t *statement) {
@@ -572,16 +844,42 @@ static int parser_parse_program(parser_t *parser, program_t *program) {
     ds_dynamic_array_init(&program->statements, sizeof(statement_t));
 
     while (true) {
-        if (parser->tok.kind == TOKEN_EOF) {
+        token_t token = parser->tok;
+
+        if (token.kind == TOKEN_EOF) {
             break;
         }
 
-        statement_t statement = {0};
-        if (parser_parse_statement(parser, &statement) != 0) {
-            // TODO: recover from error
-            return_defer(1);
+        if (token.kind == TOKEN_EVAL) {
+            token = parser_read(parser);
+
+            expression_t eval = {0};
+            if (parser_parse_expression(parser, &eval) != 0) {
+                return_defer(1);
+            }
+
+            printf("eval: \n");
+            expression_dump(&eval);
+            printf("\n\n");
+        } else if (token.kind == TOKEN_PROOF) {
+            token = parser_read(parser);
+
+            statement_t statement = {0};
+            if (parser_parse_statement(parser, &statement) != 0) {
+                return_defer(1);
+            }
+
+            printf("proof: \n");
+            statement_dump(&statement);
+            printf("\n\n");
+        } else {
+            statement_t statement = {0};
+            if (parser_parse_statement(parser, &statement) != 0) {
+                // TODO: recover from error
+                return_defer(1);
+            }
+            DS_UNREACHABLE(ds_dynamic_array_append(&program->statements, &statement));
         }
-        DS_UNREACHABLE(ds_dynamic_array_append(&program->statements, &statement));
     }
 
 defer:
@@ -607,7 +905,9 @@ int main () {
     lexer_init(&lexer, slice);
     parser_init(&parser, lexer);
 
-    parser_parse_program(&parser, &program);
+    if (parser_parse_program(&parser, &program) != 0) {
+        return_defer(1);
+    }
     program_dump(&program);
 
 defer:
