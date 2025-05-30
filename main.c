@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <string.h>
 #define DS_IO_IMPLEMENTATION
 #include "ds.h"
@@ -390,7 +391,70 @@ typedef struct statement_t {
 
 typedef struct program_t {
     ds_dynamic_array statements; /* statement_t */
+    ds_dynamic_array evals; /* expression_t */
 } program_t;
+
+static boolean expression_equal(expression_t *expr1, expression_t *expr2) {
+    if (expr1->kind == EXPRESSION_KIND_PAREN && expr1->kind == EXPRESSION_KIND_PAREN) {
+        return expression_equal(expr1->paren.expr, expr2->paren.expr);
+    }
+
+    if (expr1->kind == EXPRESSION_KIND_OPERATOR && expr2->kind == EXPRESSION_KIND_OPERATOR) {
+        return ds_string_slice_equals(&expr1->operator.value, &expr2->operator.value)
+            && expression_equal(expr1->operator.lhs, expr2->operator.lhs)
+            && expression_equal(expr2->operator.rhs, expr2->operator.rhs);
+    }
+
+    if (expr1->kind == EXPRESSION_KIND_FUNCTION && expr2->kind == EXPRESSION_KIND_FUNCTION) {
+        boolean is_same_fun = ds_string_slice_equals(&expr1->function.value, &expr2->function.value);
+        boolean is_same_len = expr1->function.args.count == expr2->function.args.count;
+
+        if (!is_same_fun || !is_same_len) return false;
+        for (unsigned int i = 0; i < expr1->function.args.count; i++) {
+            expression_t *arg1_i = NULL;
+            DS_UNREACHABLE(ds_dynamic_array_get_ref(&expr1->function.args, i, (void **)&arg1_i));
+
+            expression_t *arg2_i = NULL;
+            DS_UNREACHABLE(ds_dynamic_array_get_ref(&expr2->function.args, i, (void **)&arg2_i));
+
+            if (!expression_equal(arg1_i, arg2_i)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    if (expr1->kind == EXPRESSION_KIND_NUMBER && expr2->kind == EXPRESSION_KIND_NUMBER) {
+        return ds_string_slice_equals(&expr1->number.value, &expr2->number.value);
+    }
+
+    if (expr1->kind == EXPRESSION_KIND_NAME && expr2->kind == EXPRESSION_KIND_NAME) {
+        return ds_string_slice_equals(&expr1->name.value, &expr2->name.value);
+    }
+
+    if (expr1->kind == EXPRESSION_KIND_SET && expr2->kind == EXPRESSION_KIND_SET) {
+        boolean is_same_len = expr1->set.items.count == expr2->set.items.count;
+
+        if (!is_same_len) return false;
+        for (unsigned int i = 0; i < expr1->set.items.count; i++) {
+            expression_t *item1_i = NULL;
+            DS_UNREACHABLE(ds_dynamic_array_get_ref(&expr1->set.items, i, (void **)&item1_i));
+
+            expression_t *item2_i = NULL;
+            DS_UNREACHABLE(ds_dynamic_array_get_ref(&expr2->set.items, i, (void **)&item2_i));
+
+            if (!expression_equal(item1_i, item2_i)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 
 static void type_dump(type_t *type) {
     printf(" :");
@@ -508,6 +572,79 @@ static void program_dump(program_t *program) {
         DS_UNREACHABLE(ds_dynamic_array_get_ref(&program->statements, i, (void **)&statement));
         statement_dump(statement);
         printf("\n");
+    }
+
+    for (unsigned int i = 0; i < program->evals.count; i++) {
+        expression_t *eval = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&program->evals, i, (void **)&eval));
+        printf("eval: \n");
+        expression_dump(eval);
+        printf("\n\n");
+    }
+}
+
+static void expression_printf(expression_t *expression);
+
+static void expression_set_printf(expression_set_t *set) {
+    printf("{");
+
+    for (unsigned int i = 0; i < set->items.count; i++) {
+        expression_t *arg_i = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&set->items, i, (void **)&arg_i));
+        expression_printf(arg_i);
+
+        if (i + 1 < set->items.count) printf(", ");
+    }
+
+    printf("}");
+}
+
+static void expression_name_printf(expression_name_t *name) {
+    printf("%.*s", (int)name->value.len, name->value.str);
+}
+
+static void expression_number_printf(expression_number_t *number) {
+    printf("%.*s", (int)number->value.len, number->value.str);
+}
+
+static void expression_function_printf(expression_function_t *function) {
+    printf("%.*s", (int)function->value.len, function->value.str);
+
+    if (function->args.count > 0) printf("(");
+    for (unsigned int i = 0; i < function->args.count; i++) {
+        expression_t *arg_i = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&function->args, i, (void **)&arg_i));
+        expression_printf(arg_i);
+
+        if (i + 1 < function->args.count) printf(", ");
+    }
+    if (function->args.count > 0) printf(")");
+}
+
+static void expression_operator_printf(expression_operator_t *operator) {
+    expression_printf(operator->lhs);
+
+    printf(" %.*s ", (int)operator->value.len, operator->value.str);
+
+    expression_printf(operator->rhs);
+}
+
+static void expression_paren_printf(expression_paren_t *paren) {
+    printf("(");
+
+    expression_printf(paren->expr);
+
+    printf(")");
+}
+
+static void expression_printf(expression_t *expression) {
+    switch (expression->kind) {
+    case EXPRESSION_KIND_SET: return expression_set_printf(&expression->set);
+    case EXPRESSION_KIND_NAME: return expression_name_printf(&expression->name);
+    case EXPRESSION_KIND_NUMBER: return expression_number_printf(&expression->number);
+    case EXPRESSION_KIND_FUNCTION: return expression_function_printf(&expression->function);
+    case EXPRESSION_KIND_OPERATOR: return expression_operator_printf(&expression->operator);
+    case EXPRESSION_KIND_PAREN: return expression_paren_printf(&expression->paren);
     }
 }
 
@@ -842,6 +979,7 @@ defer:
 static int parser_parse_program(parser_t *parser, program_t *program) {
     int result = 0;
     ds_dynamic_array_init(&program->statements, sizeof(statement_t));
+    ds_dynamic_array_init(&program->evals, sizeof(expression_t));
 
     while (true) {
         token_t token = parser->tok;
@@ -857,10 +995,7 @@ static int parser_parse_program(parser_t *parser, program_t *program) {
             if (parser_parse_expression(parser, &eval) != 0) {
                 return_defer(1);
             }
-
-            printf("eval: \n");
-            expression_dump(&eval);
-            printf("\n\n");
+            DS_UNREACHABLE(ds_dynamic_array_append(&program->evals, &eval));
         } else if (token.kind == TOKEN_PROOF) {
             token = parser_read(parser);
 
@@ -869,9 +1004,9 @@ static int parser_parse_program(parser_t *parser, program_t *program) {
                 return_defer(1);
             }
 
-            printf("proof: \n");
-            statement_dump(&statement);
-            printf("\n\n");
+            // printf("proof: \n");
+            // statement_dump(&statement);
+            // printf("\n\n");
         } else {
             statement_t statement = {0};
             if (parser_parse_statement(parser, &statement) != 0) {
@@ -879,6 +1014,270 @@ static int parser_parse_program(parser_t *parser, program_t *program) {
                 return_defer(1);
             }
             DS_UNREACHABLE(ds_dynamic_array_append(&program->statements, &statement));
+        }
+    }
+
+defer:
+    return result;
+}
+
+typedef struct pair_t {
+    expression_t *key;
+    expression_t *value;
+} pair_t;
+
+static boolean find_mapping(ds_dynamic_array mapping, expression_t *key, expression_t *value) {
+    for (unsigned int i = 0; i < mapping.count; i++) {
+        pair_t *kv = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&mapping, i, (void **)&kv));
+
+        if (expression_equal(kv->key, key)) {
+            *value = *kv->value;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static boolean is_compatible(expression_t *axiom, expression_t *expr, ds_dynamic_array *mapping /* pair_t */) {
+    if (axiom->kind == EXPRESSION_KIND_PAREN && expr->kind == EXPRESSION_KIND_PAREN) {
+        return is_compatible(axiom->paren.expr, expr->paren.expr, mapping);
+    }
+
+    if (axiom->kind == EXPRESSION_KIND_OPERATOR && expr->kind == EXPRESSION_KIND_OPERATOR) {
+        return ds_string_slice_equals(&axiom->operator.value, &expr->operator.value)
+            && is_compatible(axiom->operator.lhs, expr->operator.lhs, mapping)
+            && is_compatible(axiom->operator.rhs, expr->operator.rhs, mapping);
+    }
+
+    if (axiom->kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_FUNCTION) {
+        // NOTE: here we need to check that the types are matching
+
+        pair_t kv = CLITERAL(pair_t){axiom, expr};
+        DS_UNREACHABLE(ds_dynamic_array_append(mapping, &kv));
+
+        return true;
+    }
+
+    if (axiom->kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_NUMBER) {
+        // NOTE: we still need to check types
+
+        pair_t kv = CLITERAL(pair_t){axiom, expr};
+        DS_UNREACHABLE(ds_dynamic_array_append(mapping, &kv));
+
+        return true;
+    }
+
+    if (axiom->kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_PAREN) {
+        // NOTE: we still need to check types
+
+        pair_t kv = CLITERAL(pair_t){axiom, expr->paren.expr};
+        DS_UNREACHABLE(ds_dynamic_array_append(mapping, &kv));
+
+        return true;
+    }
+
+    if (axiom->kind == EXPRESSION_KIND_NUMBER && expr->kind == EXPRESSION_KIND_NUMBER) {
+        return ds_string_slice_equals(&axiom->number.value, &expr->number.value);
+    }
+
+    return false;
+}
+
+static boolean is_visited(ds_dynamic_array *visited /* expression_t */, expression_t *expr) {
+    for (unsigned int i = 0; i < visited->count; i++) {
+        expression_t *item = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(visited, i, (void **)&item));
+
+        // TODO: implement something like equavalence instead
+        if (expression_equal(expr, item)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static int substitute(expression_t *axiom, ds_dynamic_array mapping /* pair_t */, expression_t *eval) {
+    int result = 0;
+
+    switch (axiom->kind) {
+    case EXPRESSION_KIND_SET:
+        eval->kind = EXPRESSION_KIND_SET;
+        ds_dynamic_array_init(&eval->set.items, sizeof(expression_t));
+        for (unsigned int i = 0; i < axiom->set.items.count; i++) {
+            expression_t *item_i = NULL;
+            DS_UNREACHABLE(ds_dynamic_array_get_ref(&axiom->set.items, i, (void **)&item_i));
+
+            expression_t item = {0};
+            if (substitute(item_i, mapping, &item) != 0) {
+                return_defer(1);
+            }
+            DS_UNREACHABLE(ds_dynamic_array_append(&eval->set.items, &item));
+        }
+        break;
+    case EXPRESSION_KIND_NAME:
+        if (!find_mapping(mapping, axiom, eval)) {
+            return_defer(1);
+        }
+        break;
+    case EXPRESSION_KIND_NUMBER:
+        *eval = *axiom;
+        break;
+    case EXPRESSION_KIND_FUNCTION:
+        if (!find_mapping(mapping, axiom, eval)) {
+            return_defer(1);
+        }
+        break;
+    case EXPRESSION_KIND_OPERATOR:
+        eval->kind = EXPRESSION_KIND_OPERATOR;
+        eval->operator.lhs = DS_MALLOC(NULL, sizeof(expression_t));
+        eval->operator.rhs = DS_MALLOC(NULL, sizeof(expression_t));
+        if (substitute(axiom->operator.lhs, mapping, eval->operator.lhs) != 0) {
+            return_defer(1);
+        }
+        if (substitute(axiom->operator.rhs, mapping, eval->operator.rhs) != 0) {
+            return_defer(1);
+        }
+        break;
+    case EXPRESSION_KIND_PAREN:
+        eval->kind = EXPRESSION_KIND_PAREN;
+        eval->paren.expr = DS_MALLOC(NULL, sizeof(expression_t));
+        if (substitute(axiom->paren.expr, mapping, eval->paren.expr) != 0) {
+            return_defer(1);
+        }
+        break;
+    }
+
+defer:
+    return result;
+}
+
+static int solver_solve_dfs(ds_dynamic_array statements /* statement_t */,
+                            expression_t *eval,
+                            ds_dynamic_array *visited /* expression_t */,
+                            ds_dynamic_array *parent /* pair_t */) {
+    int result = 0;
+
+    DS_UNREACHABLE(ds_dynamic_array_append(visited, eval));
+    for (unsigned int i = 0; i < statements.count; i++) {
+        statement_t *statement = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&statements, i, (void **)&statement));
+
+        // NOTE: we ignore the types for now
+
+        if (statement->equality == NULL) continue;
+
+        ds_dynamic_array mapping = {0};
+        ds_dynamic_array_init(&mapping, sizeof(pair_t));
+        if (is_compatible(&statement->equality->lhs, eval, &mapping)) {
+            expression_t eval1 = {0};
+            if (substitute(&statement->equality->rhs, mapping, &eval1) != 0) {
+                return_defer(1);
+            }
+
+            ds_dynamic_array_free(&mapping);
+
+            if (!is_visited(visited, &eval1)) {
+                pair_t kv = CLITERAL(pair_t){NULL, NULL};
+                kv.key = DS_MALLOC(NULL, sizeof(expression_t));
+                DS_MEMCPY(kv.key, &eval1, sizeof(expression_t));
+                kv.value = DS_MALLOC(NULL, sizeof(expression_t));
+                DS_MEMCPY(kv.value, eval, sizeof(expression_t));
+                DS_UNREACHABLE(ds_dynamic_array_append(parent, &kv));
+
+                if (solver_solve_dfs(statements, &eval1, visited, parent) != 0) {
+                    return_defer(1);
+                }
+            }
+        } else {
+            ds_dynamic_array_free(&mapping);
+        }
+    }
+
+defer:
+    return result;
+}
+
+static int expression_degree(expression_t *expression) {
+    switch (expression->kind) {
+    case EXPRESSION_KIND_SET: return 1; // NOTE: maybe also check the items
+    case EXPRESSION_KIND_NAME: return 0;
+    case EXPRESSION_KIND_NUMBER: return 0;
+    case EXPRESSION_KIND_FUNCTION: return 1; // NOTE: maybe also check the args
+    case EXPRESSION_KIND_OPERATOR: return 1 + expression_degree(expression->operator.lhs) + expression_degree(expression->operator.rhs);
+    case EXPRESSION_KIND_PAREN: return 1 + expression_degree(expression->paren.expr);
+    }
+}
+
+static int find_smallest_expression(ds_dynamic_array expressions, expression_t *expr) {
+    int result = 0;
+
+    int degree = INT_MAX;
+    for (unsigned int i = 0; i < expressions.count; i++) {
+        expression_t *item = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&expressions, i, (void **)&item));
+
+        int new_degree = expression_degree(item);
+        if (new_degree < degree) {
+            *expr = *item;
+        }
+    }
+
+defer:
+    return result;
+}
+
+static void show_path(ds_dynamic_array parent /* pair_t */, expression_t *result) {
+    expression_t next = {0};
+    if (!find_mapping(parent, result, &next)) return;
+
+    show_path(parent, &next);
+
+    expression_printf(&next);
+    printf(" => ");
+    expression_printf(result);
+    printf("\n");
+}
+
+int solver_solve_eval(ds_dynamic_array statements /* statement_t */, expression_t *eval) {
+    int result = 0;
+
+    ds_dynamic_array visited = {0}; // expression_t
+    ds_dynamic_array_init(&visited, sizeof(expression_t));
+
+    ds_dynamic_array parent = {0}; // pair_t
+    ds_dynamic_array_init(&parent, sizeof(pair_t));
+
+    if (solver_solve_dfs(statements, eval, &visited, &parent) != 0) {
+        return_defer(1);
+    }
+
+    expression_t expr = {0};
+    find_smallest_expression(visited, &expr);
+
+    printf("\nthe path is:\n");
+    show_path(parent, &expr);
+
+    printf("the result is: ");
+    expression_printf(&expr);
+
+defer:
+    ds_dynamic_array_free(&visited);
+
+    return result;
+}
+
+int solver_solve_program(program_t *program) {
+    int result = 0;
+
+    for (unsigned int i = 0; i < program->evals.count; i++) {
+        expression_t *eval = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&program->evals, i, (void **)&eval));
+
+        if (solver_solve_eval(program->statements, eval) != 0) {
+            return_defer(1);
         }
     }
 
@@ -909,6 +1308,8 @@ int main () {
         return_defer(1);
     }
     program_dump(&program);
+
+    solver_solve_program(&program);
 
 defer:
     if (buffer != NULL) DS_FREE(NULL, buffer);
