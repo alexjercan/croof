@@ -1,15 +1,32 @@
 CC=clang
 CFLAGS=-Wall -Wextra -std=c11 -pg
+SRC=src
+OUT=build
 
-build: main
+all: $(OUT)/main
 
-main.o: main.c ds.h
+$(OUT):
+	mkdir -p $(OUT)
+
+$(OUT)/ds.o: $(SRC)/ds.c $(SRC)/ds.h | $(OUT)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-main: main.o
+$(OUT)/lexer.o: $(SRC)/lexer.c $(SRC)/ds.h $(SRC)/lexer.h | $(OUT)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OUT)/parser.o: $(SRC)/parser.c $(SRC)/ds.h $(SRC)/lexer.h $(SRC)/parser.h | $(OUT)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OUT)/solver.o: $(SRC)/solver.c $(SRC)/ds.h $(SRC)/lexer.h $(SRC)/parser.h $(SRC)/solver.h | $(OUT)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OUT)/main.o: $(SRC)/main.c $(SRC)/ds.h $(SRC)/lexer.h $(SRC)/parser.h | $(OUT)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OUT)/main: $(OUT)/main.o $(OUT)/ds.o $(OUT)/lexer.o $(OUT)/parser.o $(OUT)/solver.o | $(OUT)
 	$(CC) $^ -o $@
 
 clean:
-	rm -f main main.o
+	rm -rf $(OUT)
 
-.PHONY: build clean
+.PHONY: all clean

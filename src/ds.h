@@ -81,6 +81,8 @@
 
 #define UNUSED(x) (void)(x)
 
+#define CLITERAL(type) (type)
+
 #ifndef DSHDEF
 #ifdef DSH_STATIC
 #define DSHDEF static
@@ -111,6 +113,20 @@ typedef int boolean;
         goto defer;                                                            \
     } while (0)
 #endif // return_defer
+
+// TRY
+//
+// Uses return_defer to simulate something like `?` in Rust
+
+#ifndef TRY
+#define TRY(expr)                                                              \
+    do {                                                                       \
+        ds_result _result = (expr);                                            \
+        if (_result != DS_OK) {                                                \
+            return_defer(_result);                                             \
+        }                                                                      \
+    } while (0)
+#endif // TRY
 
 // DS_EXIT
 //
