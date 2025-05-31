@@ -1,0 +1,19 @@
+M = {0, 1, 2, 3, 4}
+exists succ : M -> M
+exists + : M -> M -> M
+
+forall a : M => a + 0 = a
+forall a : M, forall b : M => a + b = b + a
+forall a : M, forall b : M, forall c : M => (a + b) + c = a + (b + c)
+forall a : M, forall b : M, forall c : M => a + (b + c) = (a + b) + c
+forall a : M => (a) = a
+
+succ(0) = 1
+succ(1) = 2
+succ(2) = 3
+succ(3) = 4
+
+eval succ(0)
+eval succ(0) + 0
+eval (succ(0) + 0) + 0
+eval succ(0) + succ(1)
