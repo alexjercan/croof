@@ -6,5 +6,5 @@ A Math Proof CLI Tool written in C.
 
 ```console
 make
-./main --help
+make && cat test.croof | ./build/main
 ```
