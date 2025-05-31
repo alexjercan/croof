@@ -17,14 +17,14 @@ ds_result parser_init(parser_t *parser, lexer_t lexer) {
 }
 
 boolean expression_equal(expression_t *expr1, expression_t *expr2) {
-    if (expr1->kind == EXPRESSION_KIND_PAREN && expr1->kind == EXPRESSION_KIND_PAREN) {
+    if (expr1->kind == EXPRESSION_KIND_PAREN && expr2->kind == EXPRESSION_KIND_PAREN) {
         return expression_equal(expr1->paren.expr, expr2->paren.expr);
     }
 
     if (expr1->kind == EXPRESSION_KIND_OPERATOR && expr2->kind == EXPRESSION_KIND_OPERATOR) {
         return ds_string_slice_equals(&expr1->operator.value, &expr2->operator.value)
             && expression_equal(expr1->operator.lhs, expr2->operator.lhs)
-            && expression_equal(expr2->operator.rhs, expr2->operator.rhs);
+            && expression_equal(expr1->operator.rhs, expr2->operator.rhs);
     }
 
     if (expr1->kind == EXPRESSION_KIND_FUNCTION && expr2->kind == EXPRESSION_KIND_FUNCTION) {
@@ -79,6 +79,7 @@ boolean expression_equal(expression_t *expr1, expression_t *expr2) {
 
 static void type_dump(type_t *type) {
     printf(" :");
+
     for (unsigned int i = 0; i < type->names.count; i++) {
         ds_string_slice *name = NULL;
         DS_UNREACHABLE(ds_dynamic_array_get_ref(&type->names, i, (void **)&name));
@@ -202,6 +203,30 @@ void program_dump(program_t *program) {
     }
 }
 
+static void type_printf(type_t *type) {
+    printf(" :");
+
+    for (unsigned int i = 0; i < type->names.count; i++) {
+        ds_string_slice *name = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&type->names, i, (void **)&name));
+        printf(" %.*s", (int)name->len, name->str);
+        if (i + 1 < type->names.count) {
+            printf(" ->");
+        }
+    }
+}
+
+static void define_printf(define_t *define) {
+    switch (define->quantifier) {
+    case QUANTIFIER_FORALL: printf("forall"); break;
+    case QUANTIFIER_EXISTS: printf("exists"); break;
+    }
+
+    printf(" %.*s", (int)define->name.len, define->name.str);
+
+    type_printf(&define->type);
+}
+
 static void expression_set_printf(expression_set_t *set) {
     printf("{");
 
@@ -262,6 +287,31 @@ void expression_printf(expression_t *expression) {
     case EXPRESSION_KIND_FUNCTION: return expression_function_printf(&expression->function);
     case EXPRESSION_KIND_OPERATOR: return expression_operator_printf(&expression->operator);
     case EXPRESSION_KIND_PAREN: return expression_paren_printf(&expression->paren);
+    }
+}
+
+static void equality_printf(equality_t *equality) {
+    expression_printf(&equality->lhs);
+    printf(" = ");
+    expression_printf(&equality->rhs);
+}
+
+void statement_printf(statement_t *statement) {
+    for (unsigned int i = 0; i < statement->defines.count; i++) {
+        define_t *define = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&statement->defines, i, (void **)&define));
+        define_printf(define);
+        if (i + 1 < statement->defines.count) {
+            printf(", ");
+        }
+    }
+
+    if (statement->defines.count > 0) {
+        printf(" => ");
+    }
+
+    if (statement->equality != NULL) {
+        equality_printf(statement->equality);
     }
 }
 

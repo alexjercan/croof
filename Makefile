@@ -1,5 +1,5 @@
 CC=clang
-CFLAGS=-Wall -Wextra -std=c11 -pg
+CFLAGS=-Wall -Wextra -std=c11 -g
 SRC=src
 OUT=build
 
@@ -24,7 +24,7 @@ $(OUT)/main.o: $(SRC)/main.c $(SRC)/ds.h $(SRC)/lexer.h $(SRC)/parser.h | $(OUT)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OUT)/main: $(OUT)/main.o $(OUT)/ds.o $(OUT)/lexer.o $(OUT)/parser.o $(OUT)/solver.o | $(OUT)
-	$(CC) $^ -o $@
+	$(CC) $(CFLAGS) $^ -o $@
 
 clean:
 	rm -rf $(OUT)

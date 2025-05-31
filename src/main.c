@@ -16,7 +16,7 @@ ds_result main () {
 
     buffer_len = ds_io_read(NULL, &buffer, "r");
     if (buffer_len < 0) {
-        return_defer(1);
+        return_defer(DS_ERR);
     }
 
     ds_string_slice slice = {0};
@@ -24,11 +24,7 @@ ds_result main () {
     lexer_init(&lexer, slice);
     parser_init(&parser, lexer);
 
-    if (parser_parse_program(&parser, &program) != 0) {
-        return_defer(1);
-    }
-    program_dump(&program);
-
+    TRY(parser_parse_program(&parser, &program));
     TRY(solver_solve_program(&program));
 
 defer:

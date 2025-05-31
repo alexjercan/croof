@@ -94,6 +94,7 @@ void expression_dump(expression_t *expression);
 boolean expression_equal(expression_t *expr1, expression_t *expr2);
 void program_dump(program_t *program);
 void expression_printf(expression_t *expression);
+void statement_printf(statement_t *statement);
 
 ds_result parser_parse_program(parser_t *parser, program_t *program);
 

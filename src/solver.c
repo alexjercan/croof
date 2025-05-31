@@ -1,7 +1,22 @@
 #include "limits.h"
 #include "solver.h"
 
-static boolean solver_find_mapping(ds_dynamic_array mapping /* pair_t */, expression_t *key, expression_t *value) {
+// TODO: Maybe move this as a tuple data structure in ds.h
+typedef struct pair_t {
+    expression_t *key;
+    expression_t *value;
+} pair_t;
+
+typedef struct parent_t {
+    expression_t *expr; // The expression that was evaluated
+    expression_t *prev; // The previous expression in the path
+    int used;           // The index of the statement that was used to evaluate this expression
+} parent_t;
+
+static boolean solver_find_mapping(ds_dynamic_array mapping /* pair_t */, expression_t *key, int *index) {
+    // NOTE: This function uses a "pair_t" like element to search
+    // THE STRUCURE HAS TO START WITH THE KEY
+
     // NOTE: Ideally this would be implemented using hashmap, but I am too lazy
     // to write the hashing function for the expression, so I just use a
     // dynamic array for now.
@@ -11,7 +26,9 @@ static boolean solver_find_mapping(ds_dynamic_array mapping /* pair_t */, expres
         DS_UNREACHABLE(ds_dynamic_array_get_ref(&mapping, i, (void **)&kv));
 
         if (expression_equal(kv->key, key)) {
-            *value = *(expression_t *)kv->value;
+            if (index != NULL) {
+                *index = i;
+            }
             return true;
         }
     }
@@ -40,23 +57,8 @@ static boolean solver_find_visited(ds_dynamic_array *visited /* expression_t */,
 static boolean solver_make_mapping(expression_t *reference, expression_t *expr, ds_dynamic_array *mapping /* pair_t */) {
     // TODO: implement a more sophisticated mapping algorithm
 
-    if (reference->kind == EXPRESSION_KIND_PAREN && expr->kind == EXPRESSION_KIND_PAREN) {
-        return solver_make_mapping(reference->paren.expr, expr->paren.expr, mapping);
-    }
-
-    if (reference->kind == EXPRESSION_KIND_OPERATOR && expr->kind == EXPRESSION_KIND_OPERATOR) {
-        return ds_string_slice_equals(&reference->operator.value, &expr->operator.value)
-            && solver_make_mapping(reference->operator.lhs, expr->operator.lhs, mapping)
-            && solver_make_mapping(reference->operator.rhs, expr->operator.rhs, mapping);
-    }
-
-    if (reference->kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_FUNCTION) {
-        // NOTE: here we need to check that the types are matching
-
-        pair_t kv = CLITERAL(pair_t){reference, expr};
-        DS_UNREACHABLE(ds_dynamic_array_append(mapping, &kv));
-
-        return true;
+    if (reference->kind == EXPRESSION_KIND_NUMBER && expr->kind == EXPRESSION_KIND_NUMBER) {
+        return ds_string_slice_equals(&reference->number.value, &expr->number.value);
     }
 
     if (reference->kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_NUMBER) {
@@ -68,62 +70,103 @@ static boolean solver_make_mapping(expression_t *reference, expression_t *expr, 
         return true;
     }
 
-    if (reference->kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_PAREN) {
-        // NOTE: we still need to check types
+    if (reference->kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_FUNCTION) {
+        // NOTE: here we need to check that the types are matching
 
-        pair_t kv = CLITERAL(pair_t){reference, expr->paren.expr};
+        pair_t kv = CLITERAL(pair_t){reference, expr};
         DS_UNREACHABLE(ds_dynamic_array_append(mapping, &kv));
 
         return true;
     }
 
-    if (reference->kind == EXPRESSION_KIND_NUMBER && expr->kind == EXPRESSION_KIND_NUMBER) {
-        return ds_string_slice_equals(&reference->number.value, &expr->number.value);
+    if (reference->kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_OPERATOR) {
+        // NOTE: here we need to check that the types are matching
+
+        if (reference->function.args.count > 0) {
+            return false;
+        }
+
+        pair_t kv = CLITERAL(pair_t){reference, expr};
+        DS_UNREACHABLE(ds_dynamic_array_append(mapping, &kv));
+
+        return true;
+    }
+
+    if (reference->kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_PAREN) {
+        // NOTE: we still need to check types
+
+        if (reference->function.args.count > 0) {
+            // TODO: What to do when function has arguments?
+
+            return false;
+        }
+
+        pair_t kv = CLITERAL(pair_t){reference, expr};
+        DS_UNREACHABLE(ds_dynamic_array_append(mapping, &kv));
+
+        return true;
+    }
+
+    if (reference->kind == EXPRESSION_KIND_OPERATOR && expr->kind == EXPRESSION_KIND_OPERATOR) {
+        return ds_string_slice_equals(&reference->operator.value, &expr->operator.value)
+            && solver_make_mapping(reference->operator.lhs, expr->operator.lhs, mapping)
+            && solver_make_mapping(reference->operator.rhs, expr->operator.rhs, mapping);
+    }
+
+    if (reference->kind == EXPRESSION_KIND_PAREN && expr->kind == EXPRESSION_KIND_PAREN) {
+        return solver_make_mapping(reference->paren.expr, expr->paren.expr, mapping);
     }
 
     return false;
 }
 
-static ds_result solver_substitute(expression_t *axiom, ds_dynamic_array mapping /* pair_t */, expression_t *eval) {
+static ds_result solver_substitute(expression_t *solution, ds_dynamic_array mapping /* pair_t */, expression_t *substitution) {
     ds_result result = DS_OK;
+    pair_t *kv = NULL;
+    int index = -1;
 
-    switch (axiom->kind) {
+    switch (solution->kind) {
     case EXPRESSION_KIND_SET:
-        eval->kind = EXPRESSION_KIND_SET;
-        ds_dynamic_array_init(&eval->set.items, sizeof(expression_t));
-        for (unsigned int i = 0; i < axiom->set.items.count; i++) {
+        substitution->kind = EXPRESSION_KIND_SET;
+        ds_dynamic_array_init(&substitution->set.items, sizeof(expression_t));
+        for (unsigned int i = 0; i < solution->set.items.count; i++) {
             expression_t *item_i = NULL;
-            DS_UNREACHABLE(ds_dynamic_array_get_ref(&axiom->set.items, i, (void **)&item_i));
+            DS_UNREACHABLE(ds_dynamic_array_get_ref(&solution->set.items, i, (void **)&item_i));
 
             expression_t item = {0};
             TRY(solver_substitute(item_i, mapping, &item));
-            DS_UNREACHABLE(ds_dynamic_array_append(&eval->set.items, &item));
+            DS_UNREACHABLE(ds_dynamic_array_append(&substitution->set.items, &item));
         }
         break;
     case EXPRESSION_KIND_NAME:
-        if (!solver_find_mapping(mapping, axiom, eval)) {
+        if (!solver_find_mapping(mapping, solution, &index)) {
             return_defer(DS_ERR);
         }
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&mapping, index, (void **)&kv));
+        *substitution = *kv->value;
         break;
     case EXPRESSION_KIND_NUMBER:
-        *eval = *axiom;
+        *substitution = *solution;
         break;
     case EXPRESSION_KIND_FUNCTION:
-        if (!solver_find_mapping(mapping, axiom, eval)) {
+        if (!solver_find_mapping(mapping, solution, &index)) {
             return_defer(DS_ERR);
         }
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&mapping, index, (void **)&kv));
+        *substitution = *kv->value;
         break;
     case EXPRESSION_KIND_OPERATOR:
-        eval->kind = EXPRESSION_KIND_OPERATOR;
-        eval->operator.lhs = DS_MALLOC(NULL, sizeof(expression_t));
-        eval->operator.rhs = DS_MALLOC(NULL, sizeof(expression_t));
-        TRY(solver_substitute(axiom->operator.lhs, mapping, eval->operator.lhs));
-        TRY(solver_substitute(axiom->operator.rhs, mapping, eval->operator.rhs));
+        substitution->kind = EXPRESSION_KIND_OPERATOR;
+        substitution->operator.value = solution->operator.value;
+        substitution->operator.lhs = DS_MALLOC(NULL, sizeof(expression_t));
+        substitution->operator.rhs = DS_MALLOC(NULL, sizeof(expression_t));
+        TRY(solver_substitute(solution->operator.lhs, mapping, substitution->operator.lhs));
+        TRY(solver_substitute(solution->operator.rhs, mapping, substitution->operator.rhs));
         break;
     case EXPRESSION_KIND_PAREN:
-        eval->kind = EXPRESSION_KIND_PAREN;
-        eval->paren.expr = DS_MALLOC(NULL, sizeof(expression_t));
-        TRY(solver_substitute(axiom->paren.expr, mapping, eval->paren.expr));
+        substitution->kind = EXPRESSION_KIND_PAREN;
+        substitution->paren.expr = DS_MALLOC(NULL, sizeof(expression_t));
+        TRY(solver_substitute(solution->paren.expr, mapping, substitution->paren.expr));
         break;
     }
 
@@ -134,7 +177,7 @@ defer:
 static ds_result solver_solve_dfs(ds_dynamic_array statements /* statement_t */,
                                   expression_t *expression,
                                   ds_dynamic_array *visited /* expression_t */,
-                                  ds_dynamic_array *parent /* pair_t */) {
+                                  ds_dynamic_array *parent /* parent_t */) {
     ds_result result = DS_OK;
     ds_dynamic_array mapping = {0};
     ds_dynamic_array_init(&mapping, sizeof(pair_t));
@@ -152,10 +195,7 @@ static ds_result solver_solve_dfs(ds_dynamic_array statements /* statement_t */,
         // Check if the left-hand side of the equality can be mapped to the current expression
         ds_dynamic_array_clear(&mapping);
         expression_t reference = statement->equality->lhs;
-        if (!solver_make_mapping(&reference, expression, &mapping)) {
-            ds_dynamic_array_free(&mapping);
-            continue;
-        }
+        if (!solver_make_mapping(&reference, expression, &mapping)) continue;
 
         // Apply the mapping to the right-hand side of the equality
         expression_t solution = statement->equality->rhs;
@@ -165,11 +205,12 @@ static ds_result solver_solve_dfs(ds_dynamic_array statements /* statement_t */,
         // Check if the substitution is already visited
         if (!solver_find_visited(visited, &substitution)) {
             // Create a new expression to hold the evaluation result
-            pair_t kv = {0};
-            kv.key = DS_MALLOC(NULL, sizeof(expression_t));
-            DS_MEMCPY(kv.key, &substitution, sizeof(expression_t));
-            kv.value = DS_MALLOC(NULL, sizeof(expression_t));
-            DS_MEMCPY(kv.value, expression, sizeof(expression_t));
+            parent_t kv = {0};
+            kv.expr = DS_MALLOC(NULL, sizeof(expression_t));
+            DS_MEMCPY(kv.expr, &substitution, sizeof(expression_t));
+            kv.prev = DS_MALLOC(NULL, sizeof(expression_t));
+            DS_MEMCPY(kv.prev, expression, sizeof(expression_t));
+            kv.used = i;
             DS_UNREACHABLE(ds_dynamic_array_append(parent, &kv));
 
             TRY(solver_solve_dfs(statements, &substitution, visited, parent));
@@ -205,6 +246,7 @@ static ds_result solver_expression_degree_min(ds_dynamic_array expressions, expr
 
         int new_degree = solver_expression_degree(item);
         if (new_degree < degree) {
+            degree = new_degree;
             *expr = *item;
         }
     }
@@ -218,23 +260,36 @@ defer:
     return result;
 }
 
-static void show_path(ds_dynamic_array parent /* pair_t */, expression_t *result) {
-    expression_t next = {0};
-    if (!solver_find_mapping(parent, result, &next)) return;
+static void show_path(ds_dynamic_array statements /* statement_t */, ds_dynamic_array parent /* parent_t */, expression_t *result) {
+    int index = -1;
+    if (!solver_find_mapping(parent, result, &index)) return;
 
-    show_path(parent, &next);
+    parent_t *p = NULL;
+    DS_UNREACHABLE(ds_dynamic_array_get_ref(&parent, index, (void **)&p));
 
-    expression_printf(&next);
+    statement_t *statement = NULL;
+    DS_UNREACHABLE(ds_dynamic_array_get_ref(&statements, p->used, (void **)&statement));
+
+    expression_t *next = p->prev;
+    show_path(statements, parent, next);
+
+    expression_printf(next);
     printf(" => ");
     expression_printf(result);
-    printf("\n");
+    printf(" (");
+    statement_printf(statement);
+    printf(")\n");
 }
 
 static void solver_build_steps(ds_dynamic_array parent /* pair_t */, expression_t *result, ds_dynamic_array *steps /* expression_t */) {
-    expression_t next = {0};
-    if (!solver_find_mapping(parent, result, &next)) return;
+    int index = -1;
+    if (!solver_find_mapping(parent, result, &index)) return;
 
-    solver_build_steps(parent, &next, steps);
+    pair_t *kv = NULL;
+    DS_UNREACHABLE(ds_dynamic_array_get_ref(&parent, index, (void **)&kv));
+
+    expression_t *next = kv->value;
+    solver_build_steps(parent, next, steps);
 
     DS_UNREACHABLE(ds_dynamic_array_append(steps, result));
 }
@@ -247,8 +302,8 @@ ds_result solver_solve_eval(ds_dynamic_array statements /* statement_t */,
     ds_dynamic_array visited = {0}; // expression_t
     ds_dynamic_array_init(&visited, sizeof(expression_t));
 
-    ds_dynamic_array parent = {0}; // pair_t
-    ds_dynamic_array_init(&parent, sizeof(pair_t));
+    ds_dynamic_array parent = {0}; // parent_t
+    ds_dynamic_array_init(&parent, sizeof(parent_t));
 
     TRY(solver_solve_dfs(statements, eval, &visited, &parent));
 
@@ -256,11 +311,13 @@ ds_result solver_solve_eval(ds_dynamic_array statements /* statement_t */,
     TRY(solver_expression_degree_min(visited, &expr));
 
     if (solution == NULL) {
-        printf("The path is:\n");
-        show_path(parent, &expr);
-
-        printf("\nThe result is: ");
+        printf("Question: ");
+        expression_printf(eval);
+        printf("\n");
+        show_path(statements, parent, &expr);
+        printf("Response: ");
         expression_printf(&expr);
+        printf("\n\n");
     } else {
         *solution = expr;
         if (steps != NULL) {
