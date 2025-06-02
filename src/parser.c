@@ -315,6 +315,88 @@ void statement_printf(statement_t *statement) {
     }
 }
 
+static void expression_set_clone(expression_set_t *src, expression_set_t *dst) {
+    ds_dynamic_array_init(&dst->items, sizeof(expression_t));
+
+    for (unsigned int i = 0; i < src->items.count; i++) {
+        expression_t *item_i = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&src->items, i, (void **)&item_i));
+
+        expression_t item = {0};
+        expression_clone(item_i, &item);
+        DS_UNREACHABLE(ds_dynamic_array_append(&dst->items, &item));
+    }
+}
+
+static void expression_name_clone(expression_name_t *src, expression_name_t *dst) {
+    dst->value = src->value;
+}
+
+static void expression_number_clone(expression_number_t *src, expression_number_t *dst) {
+    dst->value = src->value;
+}
+
+static void expression_function_clone(expression_function_t *src, expression_function_t *dst) {
+    dst->value = src->value;
+    ds_dynamic_array_init(&dst->args, sizeof(expression_t));
+
+    for (unsigned int i = 0; i < src->args.count; i++) {
+        expression_t *arg_i = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&src->args, i, (void **)&arg_i));
+
+        expression_t arg = {0};
+        expression_clone(arg_i, &arg);
+        DS_UNREACHABLE(ds_dynamic_array_append(&dst->args, &arg));
+    }
+}
+
+static void expression_operator_clone(expression_operator_t *src, expression_operator_t *dst) {
+    dst->value = src->value;
+
+    dst->lhs = DS_MALLOC(NULL, sizeof(expression_t));
+    if (dst->lhs == NULL) DS_PANIC(DS_ERROR_OOM);
+    expression_clone(src->lhs, dst->lhs);
+
+    dst->rhs = DS_MALLOC(NULL, sizeof(expression_t));
+    if (dst->rhs == NULL) DS_PANIC(DS_ERROR_OOM);
+    expression_clone(src->rhs, dst->rhs);
+}
+
+static void expression_paren_clone(expression_paren_t *src, expression_paren_t *dst) {
+    dst->expr = DS_MALLOC(NULL, sizeof(expression_t));
+    if (dst->expr == NULL) DS_PANIC(DS_ERROR_OOM);
+    expression_clone(src->expr, dst->expr);
+}
+
+void expression_clone(expression_t *src, expression_t *dst) {
+    switch (src->kind) {
+    case EXPRESSION_KIND_SET:
+        dst->kind = EXPRESSION_KIND_SET;
+        expression_set_clone(&src->set, &dst->set);
+        break;
+    case EXPRESSION_KIND_NAME:
+        dst->kind = EXPRESSION_KIND_NAME;
+        expression_name_clone(&src->name, &dst->name);
+        break;
+    case EXPRESSION_KIND_NUMBER:
+        dst->kind = EXPRESSION_KIND_NUMBER;
+        expression_number_clone(&src->number, &dst->number);
+        break;
+    case EXPRESSION_KIND_FUNCTION:
+        dst->kind = EXPRESSION_KIND_FUNCTION;
+        expression_function_clone(&src->function, &dst->function);
+        break;
+    case EXPRESSION_KIND_OPERATOR:
+        dst->kind = EXPRESSION_KIND_OPERATOR;
+        expression_operator_clone(&src->operator, &dst->operator);
+        break;
+    case EXPRESSION_KIND_PAREN:
+        dst->kind = EXPRESSION_KIND_PAREN;
+        expression_paren_clone(&src->paren, &dst->paren);
+        break;
+    }
+}
+
 static ds_result parser_parse_type(parser_t *parser, type_t *type) {
     ds_result result = DS_OK;
     token_t token = {0};

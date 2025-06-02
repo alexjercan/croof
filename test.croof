@@ -2,18 +2,32 @@ M = {0, 1, 2, 3, 4}
 exists succ : M -> M
 exists + : M -> M -> M
 
+forall a : M               => succ(0) + succ(a) = succ(succ(a))
+forall a : M, forall b : M => succ(succ(a)) + succ(b) = succ(a) + succ(succ(b))
+
+succ(0) = 1
+succ(1) = 2
+succ(2) = 3
+succ(3) = 4
+succ(4) = 5
+
+5 = succ(4)
+4 = succ(3)
+3 = succ(2)
+2 = succ(1)
+1 = succ(0)
+
 forall a : M => a + 0 = a
 forall a : M, forall b : M => a + b = b + a
 forall a : M, forall b : M, forall c : M => (a + b) + c = a + (b + c)
 forall a : M, forall b : M, forall c : M => a + (b + c) = (a + b) + c
 forall a : M => (a) = a
 
-succ(0) = 1
-succ(1) = 2
-succ(2) = 3
-succ(3) = 4
-
 eval succ(0)
 eval succ(0) + 0
 eval (succ(0) + 0) + 0
 eval succ(0) + succ(1)
+eval succ(0) + (succ(0) + succ(1))
+eval (succ(0) + succ(1)) + 0
+eval 2 + 3
+eval 1 + 1 + 2

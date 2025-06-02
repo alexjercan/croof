@@ -95,6 +95,7 @@ boolean expression_equal(expression_t *expr1, expression_t *expr2);
 void program_dump(program_t *program);
 void expression_printf(expression_t *expression);
 void statement_printf(statement_t *statement);
+void expression_clone(expression_t *src, expression_t *dst);
 
 ds_result parser_parse_program(parser_t *parser, program_t *program);
 

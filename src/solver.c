@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <limits.h>
 #include "solver.h"
+#include "parser.h"
 
 // TODO: Maybe move this as a tuple data structure in ds.h
 typedef struct pair_t {
@@ -66,19 +67,46 @@ static boolean solver_make_mapping(expression_t *reference, expression_t *expr, 
     if (reference->kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_NUMBER) {
         // NOTE: we still need to check types
 
-        pair_t kv = CLITERAL(pair_t){reference, expr};
-        DS_UNREACHABLE(ds_dynamic_array_append(mapping, &kv));
+        if (reference->function.args.count == 0) {
+            pair_t kv = CLITERAL(pair_t){reference, expr};
+            DS_UNREACHABLE(ds_dynamic_array_append(mapping, &kv));
 
-        return true;
+            return true;
+        }
+
+        return false;
     }
 
     if (reference->kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_FUNCTION) {
         // NOTE: here we need to check that the types are matching
 
-        pair_t kv = CLITERAL(pair_t){reference, expr};
-        DS_UNREACHABLE(ds_dynamic_array_append(mapping, &kv));
+        if (reference->function.args.count == 0) {
+            pair_t kv = CLITERAL(pair_t){reference, expr};
+            DS_UNREACHABLE(ds_dynamic_array_append(mapping, &kv));
 
-        return true;
+            return true;
+        } else {
+            // If the reference is a function and the expression is also a function,
+            // we can try to substitute the args of the function with the reference
+            if (ds_string_slice_equals(&reference->function.value, &expr->function.value)) {
+                if (reference->function.args.count == expr->function.args.count) {
+                    boolean can_substitute = true;
+                    for (unsigned int i = 0; i < reference->function.args.count; i++) {
+                        expression_t *ref_arg = NULL;
+                        DS_UNREACHABLE(ds_dynamic_array_get_ref(&reference->function.args, i, (void **)&ref_arg));
+
+                        expression_t *expr_arg = NULL;
+                        DS_UNREACHABLE(ds_dynamic_array_get_ref(&expr->function.args, i, (void **)&expr_arg));
+
+                        can_substitute = can_substitute && solver_make_mapping(ref_arg, expr_arg, mapping);
+                    }
+
+                    return can_substitute;
+                }
+            }
+
+            return false;
+        }
     }
 
     if (reference->kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_OPERATOR) {
@@ -151,11 +179,27 @@ static ds_result solver_apply_mapping(expression_t *solution, ds_dynamic_array m
         *substitution = *solution;
         break;
     case EXPRESSION_KIND_FUNCTION:
-        if (!solver_find_mapping(mapping, solution, &index)) {
-            return_defer(DS_ERR);
+        if (solution->function.args.count == 0) {
+            if (!solver_find_mapping(mapping, solution, &index)) {
+                return_defer(DS_ERR);
+            }
+
+            DS_UNREACHABLE(ds_dynamic_array_get_ref(&mapping, index, (void **)&kv));
+            *substitution = *kv->value;
+        } else {
+            substitution->kind = EXPRESSION_KIND_FUNCTION;
+            substitution->function.value = solution->function.value;
+            ds_dynamic_array_init(&substitution->function.args, sizeof(expression_t));
+
+            for (unsigned int i = 0; i < solution->function.args.count; i++) {
+                expression_t *arg_i = NULL;
+                DS_UNREACHABLE(ds_dynamic_array_get_ref(&solution->function.args, i, (void **)&arg_i));
+
+                expression_t item = {0};
+                TRY(solver_apply_mapping(arg_i, mapping, &item));
+                DS_UNREACHABLE(ds_dynamic_array_append(&substitution->function.args, &item));
+            }
         }
-        DS_UNREACHABLE(ds_dynamic_array_get_ref(&mapping, index, (void **)&kv));
-        *substitution = *kv->value;
         break;
     case EXPRESSION_KIND_OPERATOR:
         substitution->kind = EXPRESSION_KIND_OPERATOR;
@@ -176,18 +220,15 @@ defer:
     return result;
 }
 
-static ds_result solver_substitute(expression_t *expr, statement_t *statement,
+static void solver_substitute(expression_t *expr, statement_t *statement,
                         expression_t *substitution, expression_t *iter,
                         ds_dynamic_array *substitutions /* expression_t */,
                         ds_dynamic_array *mapping /* pair_t */) {
     // substitutions will contain the list of substitutions that can be made
     // "we can change `expr` to `substitution:substitutions` if `statement` is applied"
 
-    ds_result result = DS_OK;
-
     if (statement->equality == NULL) {
-        DS_LOG_ERROR("Statement has no equality");
-        return_defer(DS_ERR);
+        DS_PANIC("Statement has no equality");
     }
 
     expression_t reference = statement->equality->lhs;
@@ -196,7 +237,33 @@ static ds_result solver_substitute(expression_t *expr, statement_t *statement,
         if (ds_string_slice_equals(&reference.number.value, &expr->number.value)) {
             // If the reference is a number and the expression is also a number, we can directly substitute
             *iter = statement->equality->rhs;
-            DS_UNREACHABLE(ds_dynamic_array_append(substitutions, substitution));
+            expression_t s = {0};
+            expression_clone(substitution, &s);
+            DS_UNREACHABLE(ds_dynamic_array_append(substitutions, &s));
+        }
+    }
+
+    if (reference.kind == EXPRESSION_KIND_NUMBER && expr->kind == EXPRESSION_KIND_OPERATOR) {
+        iter->kind = EXPRESSION_KIND_OPERATOR;
+        iter->operator.value = expr->operator.value;
+        iter->operator.lhs = expr->operator.lhs;
+        iter->operator.rhs = DS_MALLOC(NULL, sizeof(expression_t));
+        solver_substitute(expr->operator.rhs, statement, substitution, iter->operator.rhs, substitutions, mapping);
+    }
+
+    if (reference.kind == EXPRESSION_KIND_NUMBER && expr->kind == EXPRESSION_KIND_FUNCTION) {
+        for (unsigned int i = 0; i < expr->function.args.count; i++) {
+            expression_t *expr_arg = NULL;
+            DS_UNREACHABLE(ds_dynamic_array_get_ref(&expr->function.args, i, (void **)&expr_arg));
+
+            iter->kind = EXPRESSION_KIND_FUNCTION;
+            iter->function.value = expr->function.value;
+            ds_dynamic_array_copy(&expr->function.args, &iter->function.args);
+
+            expression_t *iter_arg = NULL;
+            DS_UNREACHABLE(ds_dynamic_array_get_ref(&iter->function.args, i, (void **)&iter_arg));
+
+            solver_substitute(expr_arg, statement, substitution, iter_arg, substitutions, mapping);
         }
     }
 
@@ -205,13 +272,15 @@ static ds_result solver_substitute(expression_t *expr, statement_t *statement,
 
         if (reference.function.args.count == 0) {
             *iter = statement->equality->rhs;
-            DS_UNREACHABLE(ds_dynamic_array_append(substitutions, substitution));
+            expression_t s = {0};
+            expression_clone(substitution, &s);
+            DS_UNREACHABLE(ds_dynamic_array_append(substitutions, &s));
         } else {
             // If the reference is a function and the expression is also a function,
             // we can try to substitute the args of the function with the reference
             if (ds_string_slice_equals(&reference.function.value, &expr->function.value)) {
+                boolean can_substitute = true;
                 if (reference.function.args.count == expr->function.args.count) {
-                    boolean can_substitute = true;
                     for (unsigned int i = 0; i < reference.function.args.count; i++) {
                         expression_t *ref_arg = NULL;
                         DS_UNREACHABLE(ds_dynamic_array_get_ref(&reference.function.args, i, (void **)&ref_arg));
@@ -224,10 +293,30 @@ static ds_result solver_substitute(expression_t *expr, statement_t *statement,
                             break;
                         }
                     }
+
                     if (can_substitute) {
-                        // If all the args are equal, we can substitute the function
                         *iter = statement->equality->rhs;
-                        DS_UNREACHABLE(ds_dynamic_array_append(substitutions, substitution));
+                        expression_t s = {0};
+                        expression_clone(substitution, &s);
+                        DS_UNREACHABLE(ds_dynamic_array_append(substitutions, &s));
+                    }
+                } else {
+                    can_substitute = false;
+                }
+
+                if (!can_substitute) {
+                    for (unsigned int i = 0; i < expr->function.args.count; i++) {
+                        expression_t *expr_arg = NULL;
+                        DS_UNREACHABLE(ds_dynamic_array_get_ref(&expr->function.args, i, (void **)&expr_arg));
+
+                        iter->kind = EXPRESSION_KIND_FUNCTION;
+                        iter->function.value = expr->function.value;
+                        ds_dynamic_array_copy(&expr->function.args, &iter->function.args);
+
+                        expression_t *iter_arg = NULL;
+                        DS_UNREACHABLE(ds_dynamic_array_get_ref(&iter->function.args, i, (void **)&iter_arg));
+
+                        solver_substitute(expr_arg, statement, substitution, iter_arg, substitutions, mapping);
                     }
                 }
             }
@@ -240,7 +329,9 @@ static ds_result solver_substitute(expression_t *expr, statement_t *statement,
         if (reference.function.args.count == 0) {
             // If the reference is a variable we can substitute the operator
             *iter = statement->equality->rhs;
-            DS_UNREACHABLE(ds_dynamic_array_append(substitutions, substitution));
+            expression_t s = {0};
+            expression_clone(substitution, &s);
+            DS_UNREACHABLE(ds_dynamic_array_append(substitutions, &s));
         }
 
         // We can also try to substitute the lhs and rhs of the operator with the reference
@@ -248,15 +339,17 @@ static ds_result solver_substitute(expression_t *expr, statement_t *statement,
         iter->operator.value = expr->operator.value;
         iter->operator.lhs = expr->operator.lhs;
         iter->operator.rhs = DS_MALLOC(NULL, sizeof(expression_t));
-        TRY(solver_substitute(expr->operator.rhs, statement, substitution, iter->operator.rhs, substitutions, mapping));
+        solver_substitute(expr->operator.rhs, statement, substitution, iter->operator.rhs, substitutions, mapping);
     }
 
     if (reference.kind == EXPRESSION_KIND_FUNCTION && expr->kind == EXPRESSION_KIND_PAREN) {
         if (reference.function.args.count == 0) {
             ds_dynamic_array_clear(mapping);
             if (solver_make_mapping(&reference, expr, mapping)) {
-                TRY(solver_apply_mapping(&statement->equality->rhs, *mapping, iter));
-                DS_UNREACHABLE(ds_dynamic_array_append(substitutions, substitution));
+                DS_UNREACHABLE(solver_apply_mapping(&statement->equality->rhs, *mapping, iter));
+                expression_t s = {0};
+                expression_clone(substitution, &s);
+                DS_UNREACHABLE(ds_dynamic_array_append(substitutions, &s));
             }
         }
     }
@@ -265,10 +358,34 @@ static ds_result solver_substitute(expression_t *expr, statement_t *statement,
         if (ds_string_slice_equals(&reference.operator.value, &expr->operator.value)) {
             ds_dynamic_array_clear(mapping);
             if (solver_make_mapping(&reference, expr, mapping)) {
-                TRY(solver_apply_mapping(&statement->equality->rhs, *mapping, iter));
-                DS_UNREACHABLE(ds_dynamic_array_append(substitutions, substitution));
+                DS_UNREACHABLE(solver_apply_mapping(&statement->equality->rhs, *mapping, iter));
+                expression_t s = {0};
+                expression_clone(substitution, &s);
+                DS_UNREACHABLE(ds_dynamic_array_append(substitutions, &s));
             }
+
+            // We can also try to substitute the lhs and rhs of the operator with the reference
+            iter->kind = EXPRESSION_KIND_OPERATOR;
+            iter->operator.value = expr->operator.value;
+            iter->operator.lhs = expr->operator.lhs;
+            iter->operator.rhs = DS_MALLOC(NULL, sizeof(expression_t));
+            solver_substitute(expr->operator.rhs, statement, substitution, iter->operator.rhs, substitutions, mapping);
         }
+    }
+
+    if (reference.kind == EXPRESSION_KIND_OPERATOR && expr->kind == EXPRESSION_KIND_PAREN) {
+        iter->kind = EXPRESSION_KIND_PAREN;
+        iter->paren.expr = DS_MALLOC(NULL, sizeof(expression_t));
+
+        solver_substitute(expr->paren.expr, statement, substitution, iter->paren.expr, substitutions, mapping);
+    }
+
+    if (reference.kind == EXPRESSION_KIND_PAREN && expr->kind == EXPRESSION_KIND_OPERATOR) {
+        iter->kind = EXPRESSION_KIND_OPERATOR;
+        iter->operator.value = expr->operator.value;
+        iter->operator.lhs = expr->operator.lhs;
+        iter->operator.rhs = DS_MALLOC(NULL, sizeof(expression_t));
+        solver_substitute(expr->operator.rhs, statement, substitution, iter->operator.rhs, substitutions, mapping);
     }
 
     if (reference.kind == EXPRESSION_KIND_PAREN && expr->kind == EXPRESSION_KIND_PAREN) {
@@ -276,13 +393,12 @@ static ds_result solver_substitute(expression_t *expr, statement_t *statement,
         // we can try to substitute the inner expression
         ds_dynamic_array_clear(mapping);
         if (solver_make_mapping(&reference, expr, mapping)) {
-            TRY(solver_apply_mapping(&statement->equality->rhs, *mapping, iter));
-            DS_UNREACHABLE(ds_dynamic_array_append(substitutions, substitution));
+            DS_UNREACHABLE(solver_apply_mapping(&statement->equality->rhs, *mapping, iter));
+            expression_t s = {0};
+            expression_clone(substitution, &s);
+            DS_UNREACHABLE(ds_dynamic_array_append(substitutions, &s));
         }
     }
-
-defer:
-    return result;
 }
 
 static ds_result solver_solve_dfs(ds_dynamic_array statements /* statement_t */,
@@ -311,7 +427,8 @@ static ds_result solver_solve_dfs(ds_dynamic_array statements /* statement_t */,
         expression_t iter = {0};
         ds_dynamic_array_clear(&substitutions);
         ds_dynamic_array_clear(&mapping);
-        TRY(solver_substitute(expression, statement, &iter, &iter, &substitutions, &mapping));
+
+        solver_substitute(expression, statement, &iter, &iter, &substitutions, &mapping);
 
         for (unsigned int j = 0; j < substitutions.count; j++) {
             expression_t *substitution = NULL;
