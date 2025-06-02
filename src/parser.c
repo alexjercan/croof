@@ -397,6 +397,71 @@ void expression_clone(expression_t *src, expression_t *dst) {
     }
 }
 
+static void expression_set_free(expression_set_t *set) {
+    for (unsigned int i = 0; i < set->items.count; i++) {
+        expression_t *item_i = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&set->items, i, (void **)&item_i));
+        expression_free(item_i);
+    }
+    ds_dynamic_array_free(&set->items);
+}
+
+static void expression_name_free(expression_name_t *name) {
+    // No dynamic memory to free, just a slice
+    (void)name; // Silence unused parameter warning
+}
+
+static void expression_number_free(expression_number_t *number) {
+    // No dynamic memory to free, just a slice
+    (void)number; // Silence unused parameter warning
+}
+
+static void expression_function_free(expression_function_t *function) {
+    for (unsigned int i = 0; i < function->args.count; i++) {
+        expression_t *arg_i = NULL;
+        DS_UNREACHABLE(ds_dynamic_array_get_ref(&function->args, i, (void **)&arg_i));
+        expression_free(arg_i);
+    }
+    ds_dynamic_array_free(&function->args);
+}
+
+static void expression_operator_free(expression_operator_t *operator) {
+    expression_free(operator->lhs);
+    expression_free(operator->rhs);
+
+    DS_FREE(NULL, operator->lhs);
+    DS_FREE(NULL, operator->rhs);
+}
+
+static void expression_paren_free(expression_paren_t *paren) {
+    expression_free(paren->expr);
+
+    DS_FREE(NULL, paren->expr);
+}
+
+void expression_free(expression_t *expr) {
+    switch (expr->kind) {
+    case EXPRESSION_KIND_SET:
+        expression_set_free(&expr->set);
+        break;
+    case EXPRESSION_KIND_NAME:
+        expression_name_free(&expr->name);
+        break;
+    case EXPRESSION_KIND_NUMBER:
+        expression_number_free(&expr->number);
+        break;
+    case EXPRESSION_KIND_FUNCTION:
+        expression_function_free(&expr->function);
+        break;
+    case EXPRESSION_KIND_OPERATOR:
+        expression_operator_free(&expr->operator);
+        break;
+    case EXPRESSION_KIND_PAREN:
+        expression_paren_free(&expr->paren);
+        break;
+    }
+}
+
 static ds_result parser_parse_type(parser_t *parser, type_t *type) {
     ds_result result = DS_OK;
     token_t token = {0};

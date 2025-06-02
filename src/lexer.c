@@ -183,6 +183,13 @@ ds_result lexer_next(lexer_t *lexer, token_t *token) {
         lexer_read(lexer);
         *token = CLITERAL(token_t){TOKEN_EOF, {0}, position};
         return_defer(DS_OK);
+    } else if (lexer->ch == '#') {
+        // Skip comments
+        while (lexer->ch != '\n' && lexer->ch != EOF) {
+            lexer_read(lexer);
+        }
+
+        return_defer(lexer_next(lexer, token));
     } else if (lexer->ch == '{') {
         lexer_read(lexer);
         *token = CLITERAL(token_t){TOKEN_LBRACE, {0}, position};
