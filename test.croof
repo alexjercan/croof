@@ -18,13 +18,14 @@ forall a : N, forall b : N => succ(a) + b = a + succ(b)
 forall a : N, forall b : N => a + b = b + a
 forall a : N, forall b : N, forall c : N => (a + b) + c = a + (b + c)
 
-# forall a : N               => 0 * a = 0
-# forall a : N               => 1 * a = a
-# forall a : N, forall b : N => succ(a) * b = (a * b) + b
+forall a : N               => 0 * a = 0
+forall a : N               => 1 * a = a
+forall a : N, forall b : N => succ(a) * b = (a * b) + b
 
-# forall a : N, forall b : N => a * b = b * a
-# forall a : N, forall b : N, forall c : N => (a * b) * c = a * (b * c)
-# forall a : N, forall b : N, forall c : N => a * (b + c) = (a * b) + (a * c)
+forall a : N, forall b : N => a * b = b * a
+forall a : N, forall b : N, forall c : N => (a * b) * c = a * (b * c)
+forall a : N, forall b : N, forall c : N => a * (b + c) = (a * b) + (a * c)
 
-eval 2 + 3
-# eval succ(1) * 2
+eval 1 + 1
+eval 2 * 2
+eval 1 + (2 * 1)

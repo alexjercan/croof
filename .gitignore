@@ -2,3 +2,8 @@ build
 main
 main.o
 gmon.out
+
+
+# Added by cargo
+
+/target

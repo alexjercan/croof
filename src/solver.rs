@@ -1,0 +1,724 @@
+use std::collections::{HashMap, HashSet};
+
+use crate::parser::{
+    ExpressionNode, FunctionNode, ImplicationNode, OperatorNode, ParenNode, StatementNode,
+};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SolverError {
+    Todo(String),
+}
+
+pub struct Solver {
+    implications: Vec<ImplicationNode>,
+}
+
+fn create_mapping_helper(
+    from: &ExpressionNode,
+    to: &ExpressionNode,
+    mapping: &mut HashMap<ExpressionNode, ExpressionNode>,
+) -> bool {
+    match to {
+        ExpressionNode::Set(_) => todo!(),
+        ExpressionNode::Type(_) => todo!(),
+        ExpressionNode::Number(to_node) => match from {
+            ExpressionNode::Number(from_node) => to_node.value == from_node.value,
+            _ => false,
+        },
+        ExpressionNode::Variable(_) => {
+            let has_mapping = mapping.contains_key(to);
+            let should_substitute = !has_mapping || mapping.get(to) == Some(from);
+
+            if !has_mapping {
+                mapping.insert(to.clone(), from.clone());
+            }
+
+            should_substitute
+        }
+        ExpressionNode::Function(to_node) => {
+            match from {
+                ExpressionNode::Function(function_node) => {
+                    to_node.name == function_node.name
+                        && to_node.arguments.len() == function_node.arguments.len()
+                        && to_node.arguments.iter().zip(&function_node.arguments).all(
+                            |(to_arg, from_arg)| create_mapping_helper(from_arg, to_arg, mapping),
+                        )
+                }
+                _ => false,
+            }
+        }
+        ExpressionNode::Operator(to_node) => match from {
+            ExpressionNode::Operator(operator_node) => {
+                to_node.operator == operator_node.operator
+                    && create_mapping_helper(&operator_node.left, &to_node.left, mapping)
+                    && create_mapping_helper(&operator_node.right, &to_node.right, mapping)
+            }
+            _ => false,
+        },
+        ExpressionNode::Paren(to_node) => match from {
+            ExpressionNode::Paren(paren_node) => {
+                create_mapping_helper(&paren_node.expression, &to_node.expression, mapping)
+            }
+            _ => false,
+        },
+    }
+}
+
+fn create_mapping(
+    from: &ExpressionNode,
+    to: &ExpressionNode,
+) -> Option<HashMap<ExpressionNode, ExpressionNode>> {
+    let mut mapping = HashMap::new();
+    if create_mapping_helper(from, to, &mut mapping) {
+        Some(mapping)
+    } else {
+        None
+    }
+}
+
+fn apply_mapping(
+    expression: &ExpressionNode,
+    mapping: &HashMap<ExpressionNode, ExpressionNode>,
+) -> Option<ExpressionNode> {
+    match expression {
+        ExpressionNode::Set(_) => todo!(),
+        ExpressionNode::Type(_) => todo!(),
+        ExpressionNode::Number(_) => Some(expression.clone()),
+        ExpressionNode::Variable(_) => mapping.get(expression).cloned(),
+        ExpressionNode::Function(function_node) => {
+            let args = function_node
+                .arguments
+                .iter()
+                .map(|arg| apply_mapping(arg, mapping))
+                .collect::<Option<Vec<ExpressionNode>>>()?;
+
+            Some(ExpressionNode::Function(FunctionNode::new(
+                function_node.name.clone(),
+                args,
+            )))
+        }
+        ExpressionNode::Operator(operator_node) => {
+            let left = apply_mapping(&operator_node.left, mapping)?;
+            let right = apply_mapping(&operator_node.right, mapping)?;
+
+            Some(ExpressionNode::Operator(OperatorNode::new(
+                operator_node.operator.clone(),
+                left,
+                right,
+            )))
+        }
+        ExpressionNode::Paren(paren_node) => {
+            let expr = apply_mapping(&paren_node.expression, mapping)?;
+            Some(ExpressionNode::Paren(ParenNode::new(expr)))
+        }
+    }
+}
+
+fn substitute_helper(
+    expression: &ExpressionNode,
+    implication: &ImplicationNode,
+    substitutions: &mut Vec<ExpressionNode>,
+) {
+    let StatementNode::Relation(relation) = &implication.conclusion[0] else {
+        todo!("Only single expression conclusions are supported for now");
+    };
+
+    match expression {
+        ExpressionNode::Set(_) => todo!(),
+        ExpressionNode::Type(_) => todo!(),
+        ExpressionNode::Number(_) => {
+            if let Some(mapping) = create_mapping(expression, &relation.left) {
+                if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
+                    substitutions.push(substituted);
+                }
+            }
+        }
+        ExpressionNode::Variable(_) => {
+            if let Some(mapping) = create_mapping(expression, &relation.left) {
+                if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
+                    substitutions.push(substituted);
+                }
+            }
+        }
+        ExpressionNode::Function(expr_node) => {
+            for (i, arg) in expr_node.arguments.iter().enumerate() {
+                let arg_substitutions = substitute(arg, implication);
+
+                for substituted in arg_substitutions {
+                    let mut new_expr = expr_node.clone();
+                    new_expr.arguments[i] = substituted;
+                    substitutions.push(ExpressionNode::Function(new_expr.clone()));
+                }
+            }
+
+            if let Some(mapping) = create_mapping(expression, &relation.left) {
+                if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
+                    substitutions.push(substituted);
+                }
+            }
+        }
+        ExpressionNode::Operator(expr_node) => {
+            let left_substitutions = substitute(&expr_node.left, implication);
+            for left_substituted in left_substitutions {
+                let mut new_expr = expr_node.clone();
+                *new_expr.left = left_substituted;
+                substitutions.push(ExpressionNode::Operator(new_expr.clone()));
+            }
+
+            let right_substitutions = substitute(&expr_node.right, implication);
+            for right_substituted in right_substitutions {
+                let mut new_expr = expr_node.clone();
+                *new_expr.right = right_substituted;
+                substitutions.push(ExpressionNode::Operator(new_expr.clone()));
+            }
+
+            if let Some(mapping) = create_mapping(expression, &relation.left) {
+                if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
+                    substitutions.push(substituted);
+                }
+            }
+        }
+        ExpressionNode::Paren(expr_node) => {
+            let expr_substitutions = substitute(&expr_node.expression, implication);
+            for substituted in expr_substitutions {
+                substitutions.push(ExpressionNode::Paren(ParenNode::new(substituted)));
+            }
+
+            if let Some(mapping) = create_mapping(expression, &relation.left) {
+                if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
+                    substitutions.push(substituted);
+                }
+            }
+        }
+    }
+}
+
+fn substitute(expression: &ExpressionNode, implication: &ImplicationNode) -> Vec<ExpressionNode> {
+    let mut substitutions = Vec::new();
+    substitute_helper(expression, implication, &mut substitutions);
+
+    substitutions
+}
+
+impl Solver {
+    pub fn new(implications: Vec<ImplicationNode>) -> Self {
+        Solver { implications }
+    }
+
+    fn solve_dfs(
+        &self,
+        expression: &ExpressionNode,
+        visited: &mut HashSet<ExpressionNode>,
+        parent: &mut HashMap<ExpressionNode, (ExpressionNode, usize)>,
+        depth: usize,
+    ) {
+        if depth > 50 {
+            return; // Prevent deep recursion
+        }
+
+        visited.insert(expression.clone());
+
+        for (i, implication) in self.implications.iter().enumerate() {
+            for substitution in substitute(expression, implication) {
+                if !visited.contains(&substitution) {
+                    parent.insert(substitution.clone(), (expression.clone(), i));
+                    self.solve_dfs(&substitution, visited, parent, depth + 1);
+                }
+            }
+        }
+    }
+
+    fn steps(
+        parent: &HashMap<ExpressionNode, (ExpressionNode, usize)>,
+        expression: &ExpressionNode,
+    ) -> Vec<(ExpressionNode, usize)> {
+        let mut steps = Vec::new();
+        let mut current = expression.clone();
+
+        while let Some((parent_expression, implication_index)) = parent.get(&current) {
+            steps.push((parent_expression.clone(), *implication_index));
+            current = parent_expression.clone();
+        }
+
+        steps.reverse();
+        steps
+    }
+
+    pub fn solve(
+        &self,
+        expression: &ExpressionNode,
+    ) -> Result<(Vec<(ExpressionNode, usize)>, ExpressionNode), SolverError> {
+        let mut visited = HashSet::new();
+        let mut parent = HashMap::new();
+
+        self.solve_dfs(expression, &mut visited, &mut parent, 0);
+
+        let result = visited
+            .iter()
+            .min_by_key(|e| e.degree())
+            .ok_or(SolverError::Todo("No solution found".to_string()))?;
+        let steps = Self::steps(&parent, result);
+
+        Ok((steps, result.clone()))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::parser::{
+        ExpressionNode, FunctionNode, ImplicationNode, NumberNode, OperatorNode, ParenNode, RelationKind, RelationNode, StatementNode, VariableNode
+    };
+
+    #[test]
+    fn test_create_mapping_number_number() {
+        // Arrange
+        let from = ExpressionNode::Number(NumberNode::new("42"));
+        let to = ExpressionNode::Number(NumberNode::new("42"));
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_some());
+        let mapping = mapping.unwrap();
+        assert_eq!(mapping.len(), 0);
+    }
+
+    #[test]
+    fn test_create_mapping_variable_number() {
+        // Arrange
+        let from = ExpressionNode::Variable(VariableNode::new("x"));
+        let to = ExpressionNode::Number(NumberNode::new("42"));
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_none());
+    }
+
+    #[test]
+    fn test_create_mapping_function_number() {
+        // Arrange
+        let from = ExpressionNode::Function(FunctionNode::new(
+            "f",
+            vec![ExpressionNode::Number(NumberNode::new("42"))],
+        ));
+        let to = ExpressionNode::Number(NumberNode::new("42"));
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_none());
+    }
+
+    #[test]
+    fn test_create_mapping_number_variable() {
+        // Arrange
+        let from = ExpressionNode::Number(NumberNode::new("42"));
+        let to = ExpressionNode::Variable(VariableNode::new("x"));
+        let expected = HashMap::from([(
+            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Number(NumberNode::new("42")),
+        )]);
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_some());
+        let mapping = mapping.unwrap();
+        assert_eq!(mapping, expected);
+    }
+
+    #[test]
+    fn test_create_mapping_variable_variable() {
+        // Arrange
+        let from = ExpressionNode::Variable(VariableNode::new("x"));
+        let to = ExpressionNode::Variable(VariableNode::new("y"));
+        let expected = HashMap::from([(
+            ExpressionNode::Variable(VariableNode::new("y")),
+            ExpressionNode::Variable(VariableNode::new("x")),
+        )]);
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_some());
+        let mapping = mapping.unwrap();
+        assert_eq!(mapping, expected);
+    }
+
+    #[test]
+    fn test_create_mapping_function_variable() {
+        // Arrange
+        let from = ExpressionNode::Function(FunctionNode::new(
+            "f",
+            vec![ExpressionNode::Number(NumberNode::new("42"))],
+        ));
+        let to = ExpressionNode::Variable(VariableNode::new("x"));
+        let expected = HashMap::from([(
+            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Function(FunctionNode::new(
+                "f",
+                vec![ExpressionNode::Number(NumberNode::new("42"))],
+            )),
+        )]);
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_some());
+        let mapping = mapping.unwrap();
+        assert_eq!(mapping, expected);
+    }
+
+    #[test]
+    fn test_create_mapping_operator_variable() {
+        // Arrange
+        let from = ExpressionNode::Operator(OperatorNode::new(
+            "+",
+            ExpressionNode::Number(NumberNode::new("42")),
+            ExpressionNode::Number(NumberNode::new("1")),
+        ));
+        let to = ExpressionNode::Variable(VariableNode::new("x"));
+        let expected = HashMap::from([(
+            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Operator(OperatorNode::new(
+                "+",
+                ExpressionNode::Number(NumberNode::new("42")),
+                ExpressionNode::Number(NumberNode::new("1")),
+            )),
+        )]);
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_some());
+        let mapping = mapping.unwrap();
+        assert_eq!(mapping, expected);
+    }
+
+    #[test]
+    fn test_create_mapping_paren_variable() {
+        // Arrange
+        let from = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(NumberNode::new(
+            "42",
+        ))));
+        let to = ExpressionNode::Variable(VariableNode::new("x"));
+        let expected = HashMap::from([(
+            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(NumberNode::new(
+                "42",
+            )))),
+        )]);
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_some());
+        let mapping = mapping.unwrap();
+        assert_eq!(mapping, expected);
+    }
+
+    #[test]
+    fn test_create_mapping_number_function() {
+        // Arrange
+        let from = ExpressionNode::Number(NumberNode::new("42"));
+        let to = ExpressionNode::Function(FunctionNode::new(
+            "f",
+            vec![ExpressionNode::Number(NumberNode::new("42"))],
+        ));
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_none());
+    }
+
+    #[test]
+    fn test_create_mapping_function_function() {
+        // Arrange
+        let from = ExpressionNode::Function(FunctionNode::new(
+            "f",
+            vec![ExpressionNode::Number(NumberNode::new("42"))],
+        ));
+        let to = ExpressionNode::Function(FunctionNode::new(
+            "f",
+            vec![ExpressionNode::Variable(VariableNode::new("x"))],
+        ));
+        let expected = HashMap::from([(
+            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Number(NumberNode::new("42")),
+        )]);
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_some());
+        let mapping = mapping.unwrap();
+        assert_eq!(mapping, expected);
+    }
+
+    #[test]
+    fn test_create_mapping_function_operator() {
+        // Arrange
+        let from = ExpressionNode::Function(FunctionNode::new(
+            "f",
+            vec![ExpressionNode::Number(NumberNode::new("42"))],
+        ));
+        let to = ExpressionNode::Operator(OperatorNode::new(
+            "+",
+            ExpressionNode::Number(NumberNode::new("42")),
+            ExpressionNode::Number(NumberNode::new("1")),
+        ));
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_none());
+    }
+
+    #[test]
+    fn test_create_mapping_operator_operator() {
+        // Arrange
+        let from = ExpressionNode::Operator(OperatorNode::new(
+            "+",
+            ExpressionNode::Number(NumberNode::new("42")),
+            ExpressionNode::Number(NumberNode::new("1")),
+        ));
+        let to = ExpressionNode::Operator(OperatorNode::new(
+            "+",
+            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Variable(VariableNode::new("y")),
+        ));
+        let expected = HashMap::from([
+            (
+                ExpressionNode::Variable(VariableNode::new("x")),
+                ExpressionNode::Number(NumberNode::new("42")),
+            ),
+            (
+                ExpressionNode::Variable(VariableNode::new("y")),
+                ExpressionNode::Number(NumberNode::new("1")),
+            ),
+        ]);
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_some());
+        let mapping = mapping.unwrap();
+        assert_eq!(mapping, expected);
+    }
+
+    #[test]
+    fn test_create_mapping_variable_paren() {
+        // Arrange
+        let from = ExpressionNode::Variable(VariableNode::new("x"));
+        let to = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(NumberNode::new(
+            "42",
+        ))));
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_none());
+    }
+
+    #[test]
+    fn test_create_mapping_paren_paren() {
+        // Arrange
+        let from = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(NumberNode::new(
+            "42",
+        ))));
+        let to = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Variable(
+            VariableNode::new("x"),
+        )));
+        let expected = HashMap::from([(
+            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Number(NumberNode::new("42")),
+        )]);
+
+        // Act
+        let mapping = create_mapping(&from, &to);
+
+        // Assert
+        assert!(mapping.is_some());
+        let mapping = mapping.unwrap();
+        assert_eq!(mapping, expected);
+    }
+
+    #[test]
+    fn test_apply_mapping_number() {
+        // Arrange
+        let expression = ExpressionNode::Number(NumberNode::new("42"));
+        let mapping = HashMap::new();
+        let expected = ExpressionNode::Number(NumberNode::new("42"));
+
+        // Act
+        let result = apply_mapping(&expression, &mapping);
+
+        // Assert
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_apply_mapping_variable() {
+        // Arrange
+        let expression = ExpressionNode::Variable(VariableNode::new("x"));
+        let mapping = HashMap::from([(
+            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Number(NumberNode::new("42")),
+        )]);
+        let expected = ExpressionNode::Number(NumberNode::new("42"));
+
+        // Act
+        let result = apply_mapping(&expression, &mapping);
+
+        // Assert
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_apply_mapping_function() {
+        // Arrange
+        let expression = ExpressionNode::Function(FunctionNode::new(
+            "f",
+            vec![ExpressionNode::Variable(VariableNode::new("x"))],
+        ));
+        let mapping = HashMap::from([(
+            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Number(NumberNode::new("42")),
+        )]);
+        let expected = ExpressionNode::Function(FunctionNode::new(
+            "f",
+            vec![ExpressionNode::Number(NumberNode::new("42"))],
+        ));
+
+        // Act
+        let result = apply_mapping(&expression, &mapping);
+
+        // Assert
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_apply_mapping_operator() {
+        // Arrange
+        let expression = ExpressionNode::Operator(OperatorNode::new(
+            "+",
+            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Number(NumberNode::new("1")),
+        ));
+        let mapping = HashMap::from([(
+            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Number(NumberNode::new("42")),
+        )]);
+        let expected = ExpressionNode::Operator(OperatorNode::new(
+            "+",
+            ExpressionNode::Number(NumberNode::new("42")),
+            ExpressionNode::Number(NumberNode::new("1")),
+        ));
+
+        // Act
+        let result = apply_mapping(&expression, &mapping);
+
+        // Assert
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_apply_mapping_paren() {
+        // Arrange
+        let expression = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Variable(
+            VariableNode::new("x"),
+        )));
+        let mapping = HashMap::from([(
+            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Number(NumberNode::new("42")),
+        )]);
+        let expected = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(
+            NumberNode::new("42"),
+        )));
+
+        // Act
+        let result = apply_mapping(&expression, &mapping);
+
+        // Assert
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_substitute_number_implication_id() {
+        // Arrange
+        let expression = ExpressionNode::Number(NumberNode::new("42"));
+        let implication = ImplicationNode::new(
+            Vec::new(),
+            vec![StatementNode::Relation(RelationNode::new(
+                RelationKind::Equality,
+                ExpressionNode::Variable(VariableNode::new("a")),
+                ExpressionNode::Variable(VariableNode::new("a")),
+            ))],
+        );
+        let expected = vec![ExpressionNode::Number(NumberNode::new("42"))];
+
+        // Act
+        let substitutions = substitute(&expression, &implication);
+
+        // Assert
+        assert_eq!(substitutions, expected);
+    }
+
+    #[test]
+    fn test_substitute_operator_implication_commutative() {
+        // Arrange
+        let expression = ExpressionNode::Operator(OperatorNode::new(
+            "+",
+            ExpressionNode::Variable(VariableNode::new("1")),
+            ExpressionNode::Variable(VariableNode::new("2")),
+        ));
+        let implication = ImplicationNode::new(
+            Vec::new(),
+            vec![StatementNode::Relation(RelationNode::new(
+                RelationKind::Equality,
+                ExpressionNode::Operator(OperatorNode::new(
+                    "+",
+                    ExpressionNode::Variable(VariableNode::new("b")),
+                    ExpressionNode::Variable(VariableNode::new("a")),
+                )),
+                ExpressionNode::Operator(OperatorNode::new(
+                    "+",
+                    ExpressionNode::Variable(VariableNode::new("a")),
+                    ExpressionNode::Variable(VariableNode::new("b")),
+                )),
+            ))],
+        );
+        let expected = vec![ExpressionNode::Operator(OperatorNode::new(
+            "+",
+            ExpressionNode::Variable(VariableNode::new("2")),
+            ExpressionNode::Variable(VariableNode::new("1")),
+        ))];
+
+        // Act
+        let substitutions = substitute(&expression, &implication);
+
+        // Assert
+        assert_eq!(substitutions, expected);
+    }
+}
