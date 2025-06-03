@@ -1,10 +1,9 @@
 # Croof
 
-A Math Proof CLI Tool written in C.
+A Math Proof CLI Tool written in ~~C~~ Rust.
 
 ### Quickstart
 
 ```console
-make
-make && cat test.croof | ./build/main
+cargo run --release -- --help
 ```
