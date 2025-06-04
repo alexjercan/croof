@@ -266,15 +266,20 @@ impl Solver {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::parser::{
-        ExpressionNode, FunctionNode, ImplicationNode, NumberNode, OperatorNode, ParenNode, RelationKind, RelationNode, StatementNode, VariableNode
+    use crate::{
+        lexer::{Token, TokenKind},
+        parser::{
+            ExpressionNode, FunctionNode, ImplicationNode, NumberNode, OperatorNode, ParenNode,
+            RelationKind, RelationNode, StatementNode, VariableNode,
+        },
     };
 
     #[test]
     fn test_create_mapping_number_number() {
         // Arrange
-        let from = ExpressionNode::Number(NumberNode::new("42"));
-        let to = ExpressionNode::Number(NumberNode::new("42"));
+        let from =
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42")));
+        let to = ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42")));
 
         // Act
         let mapping = create_mapping(&from, &to);
@@ -288,8 +293,11 @@ mod test {
     #[test]
     fn test_create_mapping_variable_number() {
         // Arrange
-        let from = ExpressionNode::Variable(VariableNode::new("x"));
-        let to = ExpressionNode::Number(NumberNode::new("42"));
+        let from = ExpressionNode::Variable(VariableNode::new(Token::value(
+            TokenKind::Identifier,
+            "x",
+        )));
+        let to = ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42")));
 
         // Act
         let mapping = create_mapping(&from, &to);
@@ -302,10 +310,13 @@ mod test {
     fn test_create_mapping_function_number() {
         // Arrange
         let from = ExpressionNode::Function(FunctionNode::new(
-            "f",
-            vec![ExpressionNode::Number(NumberNode::new("42"))],
+            Token::value(TokenKind::Identifier, "f"),
+            vec![ExpressionNode::Number(NumberNode::new(Token::value(
+                TokenKind::Number,
+                "42",
+            )))],
         ));
-        let to = ExpressionNode::Number(NumberNode::new("42"));
+        let to = ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42")));
 
         // Act
         let mapping = create_mapping(&from, &to);
@@ -317,11 +328,18 @@ mod test {
     #[test]
     fn test_create_mapping_number_variable() {
         // Arrange
-        let from = ExpressionNode::Number(NumberNode::new("42"));
-        let to = ExpressionNode::Variable(VariableNode::new("x"));
+        let from =
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42")));
+        let to = ExpressionNode::Variable(VariableNode::new(Token::value(
+            TokenKind::Identifier,
+            "x",
+        )));
         let expected = HashMap::from([(
-            ExpressionNode::Variable(VariableNode::new("x")),
-            ExpressionNode::Number(NumberNode::new("42")),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
         )]);
 
         // Act
@@ -336,11 +354,23 @@ mod test {
     #[test]
     fn test_create_mapping_variable_variable() {
         // Arrange
-        let from = ExpressionNode::Variable(VariableNode::new("x"));
-        let to = ExpressionNode::Variable(VariableNode::new("y"));
+        let from = ExpressionNode::Variable(VariableNode::new(Token::value(
+            TokenKind::Identifier,
+            "x",
+        )));
+        let to = ExpressionNode::Variable(VariableNode::new(Token::value(
+            TokenKind::Identifier,
+            "y",
+        )));
         let expected = HashMap::from([(
-            ExpressionNode::Variable(VariableNode::new("y")),
-            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "y",
+            ))),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
         )]);
 
         // Act
@@ -356,15 +386,27 @@ mod test {
     fn test_create_mapping_function_variable() {
         // Arrange
         let from = ExpressionNode::Function(FunctionNode::new(
-            "f",
-            vec![ExpressionNode::Number(NumberNode::new("42"))],
+            Token::value(TokenKind::Identifier, "f"),
+            vec![ExpressionNode::Number(NumberNode::new(Token::value(
+                TokenKind::Number,
+                "42",
+            )))],
         ));
-        let to = ExpressionNode::Variable(VariableNode::new("x"));
+        let to = ExpressionNode::Variable(VariableNode::new(Token::value(
+            TokenKind::Identifier,
+            "x",
+        )));
         let expected = HashMap::from([(
-            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
             ExpressionNode::Function(FunctionNode::new(
-                "f",
-                vec![ExpressionNode::Number(NumberNode::new("42"))],
+                Token::value(TokenKind::Identifier, "f"),
+                vec![ExpressionNode::Number(NumberNode::new(Token::value(
+                    TokenKind::Number,
+                    "42",
+                )))],
             )),
         )]);
 
@@ -381,17 +423,23 @@ mod test {
     fn test_create_mapping_operator_variable() {
         // Arrange
         let from = ExpressionNode::Operator(OperatorNode::new(
-            "+",
-            ExpressionNode::Number(NumberNode::new("42")),
-            ExpressionNode::Number(NumberNode::new("1")),
+            Token::value(TokenKind::Operator, "+"),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "1"))),
         ));
-        let to = ExpressionNode::Variable(VariableNode::new("x"));
+        let to = ExpressionNode::Variable(VariableNode::new(Token::value(
+            TokenKind::Identifier,
+            "x",
+        )));
         let expected = HashMap::from([(
-            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
             ExpressionNode::Operator(OperatorNode::new(
-                "+",
-                ExpressionNode::Number(NumberNode::new("42")),
-                ExpressionNode::Number(NumberNode::new("1")),
+                Token::value(TokenKind::Operator, "+"),
+                ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
+                ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "1"))),
             )),
         )]);
 
@@ -408,13 +456,19 @@ mod test {
     fn test_create_mapping_paren_variable() {
         // Arrange
         let from = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(NumberNode::new(
-            "42",
+            Token::value(TokenKind::Number, "42"),
         ))));
-        let to = ExpressionNode::Variable(VariableNode::new("x"));
+        let to = ExpressionNode::Variable(VariableNode::new(Token::value(
+            TokenKind::Identifier,
+            "x",
+        )));
         let expected = HashMap::from([(
-            ExpressionNode::Variable(VariableNode::new("x")),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
             ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(NumberNode::new(
-                "42",
+                Token::value(TokenKind::Number, "42"),
             )))),
         )]);
 
@@ -430,10 +484,14 @@ mod test {
     #[test]
     fn test_create_mapping_number_function() {
         // Arrange
-        let from = ExpressionNode::Number(NumberNode::new("42"));
+        let from =
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42")));
         let to = ExpressionNode::Function(FunctionNode::new(
-            "f",
-            vec![ExpressionNode::Number(NumberNode::new("42"))],
+            Token::value(TokenKind::Identifier, "f"),
+            vec![ExpressionNode::Number(NumberNode::new(Token::value(
+                TokenKind::Number,
+                "42",
+            )))],
         ));
 
         // Act
@@ -447,16 +505,25 @@ mod test {
     fn test_create_mapping_function_function() {
         // Arrange
         let from = ExpressionNode::Function(FunctionNode::new(
-            "f",
-            vec![ExpressionNode::Number(NumberNode::new("42"))],
+            Token::value(TokenKind::Identifier, "f"),
+            vec![ExpressionNode::Number(NumberNode::new(Token::value(
+                TokenKind::Number,
+                "42",
+            )))],
         ));
         let to = ExpressionNode::Function(FunctionNode::new(
-            "f",
-            vec![ExpressionNode::Variable(VariableNode::new("x"))],
+            Token::value(TokenKind::Identifier, "f"),
+            vec![ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            )))],
         ));
         let expected = HashMap::from([(
-            ExpressionNode::Variable(VariableNode::new("x")),
-            ExpressionNode::Number(NumberNode::new("42")),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
         )]);
 
         // Act
@@ -472,13 +539,16 @@ mod test {
     fn test_create_mapping_function_operator() {
         // Arrange
         let from = ExpressionNode::Function(FunctionNode::new(
-            "f",
-            vec![ExpressionNode::Number(NumberNode::new("42"))],
+            Token::value(TokenKind::Identifier, "f"),
+            vec![ExpressionNode::Number(NumberNode::new(Token::value(
+                TokenKind::Number,
+                "42",
+            )))],
         ));
         let to = ExpressionNode::Operator(OperatorNode::new(
-            "+",
-            ExpressionNode::Number(NumberNode::new("42")),
-            ExpressionNode::Number(NumberNode::new("1")),
+            Token::value(TokenKind::Operator, "+"),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "1"))),
         ));
 
         // Act
@@ -492,23 +562,35 @@ mod test {
     fn test_create_mapping_operator_operator() {
         // Arrange
         let from = ExpressionNode::Operator(OperatorNode::new(
-            "+",
-            ExpressionNode::Number(NumberNode::new("42")),
-            ExpressionNode::Number(NumberNode::new("1")),
+            Token::value(TokenKind::Operator, "+"),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "1"))),
         ));
         let to = ExpressionNode::Operator(OperatorNode::new(
-            "+",
-            ExpressionNode::Variable(VariableNode::new("x")),
-            ExpressionNode::Variable(VariableNode::new("y")),
+            Token::value(TokenKind::Operator, "+"),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "y",
+            ))),
         ));
         let expected = HashMap::from([
             (
-                ExpressionNode::Variable(VariableNode::new("x")),
-                ExpressionNode::Number(NumberNode::new("42")),
+                ExpressionNode::Variable(VariableNode::new(Token::value(
+                    TokenKind::Identifier,
+                    "x",
+                ))),
+                ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
             ),
             (
-                ExpressionNode::Variable(VariableNode::new("y")),
-                ExpressionNode::Number(NumberNode::new("1")),
+                ExpressionNode::Variable(VariableNode::new(Token::value(
+                    TokenKind::Identifier,
+                    "y",
+                ))),
+                ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "1"))),
             ),
         ]);
 
@@ -524,9 +606,12 @@ mod test {
     #[test]
     fn test_create_mapping_variable_paren() {
         // Arrange
-        let from = ExpressionNode::Variable(VariableNode::new("x"));
+        let from = ExpressionNode::Variable(VariableNode::new(Token::value(
+            TokenKind::Identifier,
+            "x",
+        )));
         let to = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(NumberNode::new(
-            "42",
+            Token::value(TokenKind::Number, "42"),
         ))));
 
         // Act
@@ -540,14 +625,17 @@ mod test {
     fn test_create_mapping_paren_paren() {
         // Arrange
         let from = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(NumberNode::new(
-            "42",
+            Token::value(TokenKind::Number, "42"),
         ))));
         let to = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Variable(
-            VariableNode::new("x"),
+            VariableNode::new(Token::value(TokenKind::Identifier, "x")),
         )));
         let expected = HashMap::from([(
-            ExpressionNode::Variable(VariableNode::new("x")),
-            ExpressionNode::Number(NumberNode::new("42")),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
         )]);
 
         // Act
@@ -562,9 +650,11 @@ mod test {
     #[test]
     fn test_apply_mapping_number() {
         // Arrange
-        let expression = ExpressionNode::Number(NumberNode::new("42"));
+        let expression =
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42")));
         let mapping = HashMap::new();
-        let expected = ExpressionNode::Number(NumberNode::new("42"));
+        let expected =
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42")));
 
         // Act
         let result = apply_mapping(&expression, &mapping);
@@ -577,12 +667,19 @@ mod test {
     #[test]
     fn test_apply_mapping_variable() {
         // Arrange
-        let expression = ExpressionNode::Variable(VariableNode::new("x"));
+        let expression = ExpressionNode::Variable(VariableNode::new(Token::value(
+            TokenKind::Identifier,
+            "x",
+        )));
         let mapping = HashMap::from([(
-            ExpressionNode::Variable(VariableNode::new("x")),
-            ExpressionNode::Number(NumberNode::new("42")),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
         )]);
-        let expected = ExpressionNode::Number(NumberNode::new("42"));
+        let expected =
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42")));
 
         // Act
         let result = apply_mapping(&expression, &mapping);
@@ -596,16 +693,25 @@ mod test {
     fn test_apply_mapping_function() {
         // Arrange
         let expression = ExpressionNode::Function(FunctionNode::new(
-            "f",
-            vec![ExpressionNode::Variable(VariableNode::new("x"))],
+            Token::value(TokenKind::Identifier, "f"),
+            vec![ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            )))],
         ));
         let mapping = HashMap::from([(
-            ExpressionNode::Variable(VariableNode::new("x")),
-            ExpressionNode::Number(NumberNode::new("42")),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
         )]);
         let expected = ExpressionNode::Function(FunctionNode::new(
-            "f",
-            vec![ExpressionNode::Number(NumberNode::new("42"))],
+            Token::value(TokenKind::Identifier, "f"),
+            vec![ExpressionNode::Number(NumberNode::new(Token::value(
+                TokenKind::Number,
+                "42",
+            )))],
         ));
 
         // Act
@@ -620,18 +726,24 @@ mod test {
     fn test_apply_mapping_operator() {
         // Arrange
         let expression = ExpressionNode::Operator(OperatorNode::new(
-            "+",
-            ExpressionNode::Variable(VariableNode::new("x")),
-            ExpressionNode::Number(NumberNode::new("1")),
+            Token::value(TokenKind::Operator, "+"),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "1"))),
         ));
         let mapping = HashMap::from([(
-            ExpressionNode::Variable(VariableNode::new("x")),
-            ExpressionNode::Number(NumberNode::new("42")),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
         )]);
         let expected = ExpressionNode::Operator(OperatorNode::new(
-            "+",
-            ExpressionNode::Number(NumberNode::new("42")),
-            ExpressionNode::Number(NumberNode::new("1")),
+            Token::value(TokenKind::Operator, "+"),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "1"))),
         ));
 
         // Act
@@ -646,14 +758,17 @@ mod test {
     fn test_apply_mapping_paren() {
         // Arrange
         let expression = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Variable(
-            VariableNode::new("x"),
+            VariableNode::new(Token::value(TokenKind::Identifier, "x")),
         )));
         let mapping = HashMap::from([(
-            ExpressionNode::Variable(VariableNode::new("x")),
-            ExpressionNode::Number(NumberNode::new("42")),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "x",
+            ))),
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
         )]);
         let expected = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(
-            NumberNode::new("42"),
+            NumberNode::new(Token::value(TokenKind::Number, "42")),
         )));
 
         // Act
@@ -667,16 +782,27 @@ mod test {
     #[test]
     fn test_substitute_number_implication_id() {
         // Arrange
-        let expression = ExpressionNode::Number(NumberNode::new("42"));
+        let expression =
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42")));
         let implication = ImplicationNode::new(
             Vec::new(),
             vec![StatementNode::Relation(RelationNode::new(
                 RelationKind::Equality,
-                ExpressionNode::Variable(VariableNode::new("a")),
-                ExpressionNode::Variable(VariableNode::new("a")),
+                Token::new(TokenKind::Equal),
+                ExpressionNode::Variable(VariableNode::new(Token::value(
+                    TokenKind::Identifier,
+                    "a",
+                ))),
+                ExpressionNode::Variable(VariableNode::new(Token::value(
+                    TokenKind::Identifier,
+                    "a",
+                ))),
             ))],
         );
-        let expected = vec![ExpressionNode::Number(NumberNode::new("42"))];
+        let expected = vec![ExpressionNode::Number(NumberNode::new(Token::value(
+            TokenKind::Number,
+            "42",
+        )))];
 
         // Act
         let substitutions = substitute(&expression, &implication);
@@ -689,30 +815,55 @@ mod test {
     fn test_substitute_operator_implication_commutative() {
         // Arrange
         let expression = ExpressionNode::Operator(OperatorNode::new(
-            "+",
-            ExpressionNode::Variable(VariableNode::new("1")),
-            ExpressionNode::Variable(VariableNode::new("2")),
+            Token::value(TokenKind::Operator, "+"),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "1",
+            ))),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "2",
+            ))),
         ));
         let implication = ImplicationNode::new(
             Vec::new(),
             vec![StatementNode::Relation(RelationNode::new(
                 RelationKind::Equality,
+                Token::new(TokenKind::Equal),
                 ExpressionNode::Operator(OperatorNode::new(
-                    "+",
-                    ExpressionNode::Variable(VariableNode::new("b")),
-                    ExpressionNode::Variable(VariableNode::new("a")),
+                    Token::value(TokenKind::Operator, "+"),
+                    ExpressionNode::Variable(VariableNode::new(Token::value(
+                        TokenKind::Identifier,
+                        "b",
+                    ))),
+                    ExpressionNode::Variable(VariableNode::new(Token::value(
+                        TokenKind::Identifier,
+                        "a",
+                    ))),
                 )),
                 ExpressionNode::Operator(OperatorNode::new(
-                    "+",
-                    ExpressionNode::Variable(VariableNode::new("a")),
-                    ExpressionNode::Variable(VariableNode::new("b")),
+                    Token::value(TokenKind::Operator, "+"),
+                    ExpressionNode::Variable(VariableNode::new(Token::value(
+                        TokenKind::Identifier,
+                        "a",
+                    ))),
+                    ExpressionNode::Variable(VariableNode::new(Token::value(
+                        TokenKind::Identifier,
+                        "b",
+                    ))),
                 )),
             ))],
         );
         let expected = vec![ExpressionNode::Operator(OperatorNode::new(
-            "+",
-            ExpressionNode::Variable(VariableNode::new("2")),
-            ExpressionNode::Variable(VariableNode::new("1")),
+            Token::value(TokenKind::Operator, "+"),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "2",
+            ))),
+            ExpressionNode::Variable(VariableNode::new(Token::value(
+                TokenKind::Identifier,
+                "1",
+            ))),
         ))];
 
         // Act

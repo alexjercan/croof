@@ -1,6 +1,11 @@
+use std::fmt::Display;
+use std::fs::File;
+use std::hash::{Hash, Hasher};
+use std::io::{self, Read};
+
 const EOF: char = '\0';
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum TokenKind {
     Eof,
     #[default]
@@ -21,18 +26,72 @@ pub enum TokenKind {
     Forall,
     Exists,
     Eval,
+    Def,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Token {
     pub kind: TokenKind,
     pub value: Option<String>,
+
+    // Token Info (should be ignored in equality checks or hashing)
     pub pos: usize,
+    pub source_id: usize,
+}
+
+impl PartialEq for Token {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind && self.value == other.value
+    }
+}
+
+impl Eq for Token {}
+
+impl Hash for Token {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.kind.hash(state);
+        if let Some(ref value) = self.value {
+            value.hash(state);
+        }
+    }
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.kind)?;
+        if let Some(ref value) = self.value {
+            write!(f, "({})", value)?;
+        }
+        Ok(())
+    }
+}
+
+impl Token {
+    pub fn new(kind: TokenKind) -> Self {
+        Token {
+            kind,
+            value: None,
+            pos: 0,
+            source_id: 0,
+        }
+    }
+
+    pub fn value<S>(kind: TokenKind, value: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Token {
+            kind,
+            value: Some(value.into()),
+            pos: 0,
+            source_id: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct Lexer {
-    filename: Option<String>,
+    source_id: usize,
 
     input: String,
     pos: usize,
@@ -67,14 +126,8 @@ impl Lexer {
     }
 
     fn tokenize_symbol(&mut self) -> Token {
-        let position = self.pos;
-
         if !issymbol(self.ch) {
-            return Token {
-                kind: TokenKind::Illegal,
-                value: Some(self.ch.to_string()),
-                pos: position,
-            };
+            return Token::value(TokenKind::Illegal, self.ch);
         }
 
         let mut value = String::new();
@@ -84,41 +137,19 @@ impl Lexer {
         }
 
         if value == "->" {
-            Token {
-                kind: TokenKind::Arrow,
-                pos: position,
-                ..Default::default()
-            }
+            Token::new(TokenKind::Arrow)
         } else if value == "=" {
-            return Token {
-                kind: TokenKind::Equal,
-                pos: position,
-                ..Default::default()
-            };
+            Token::new(TokenKind::Equal)
         } else if value == "=>" {
-            return Token {
-                kind: TokenKind::Then,
-                pos: position,
-                ..Default::default()
-            };
+            Token::new(TokenKind::Then)
         } else {
-            return Token {
-                kind: TokenKind::Operator,
-                value: Some(value),
-                pos: position,
-            };
+            Token::value(TokenKind::Operator, value)
         }
     }
 
     fn tokenize_number(&mut self) -> Token {
-        let position = self.pos;
-
         if !self.ch.is_ascii_digit() {
-            return Token {
-                kind: TokenKind::Illegal,
-                value: Some(self.ch.to_string()),
-                pos: position,
-            };
+            return Token::value(TokenKind::Illegal, self.ch);
         }
 
         let mut value = String::new();
@@ -127,22 +158,13 @@ impl Lexer {
             self.read();
         }
 
-        Token {
-            kind: TokenKind::Number,
-            value: Some(value),
-            pos: position,
-        }
+        // TODO: Handle decimal numbers and scientific notation
+        Token::value(TokenKind::Number, value)
     }
 
     fn tokenize_type(&mut self) -> Token {
-        let position = self.pos;
-
         if !self.ch.is_uppercase() {
-            return Token {
-                kind: TokenKind::Illegal,
-                value: Some(self.ch.to_string()),
-                pos: position,
-            };
+            return Token::value(TokenKind::Illegal, self.ch);
         }
 
         let mut value = String::new();
@@ -151,22 +173,12 @@ impl Lexer {
             self.read();
         }
 
-        Token {
-            kind: TokenKind::Type,
-            value: Some(value),
-            pos: position,
-        }
+        Token::value(TokenKind::Type, value)
     }
 
     fn tokenize_identifier(&mut self) -> Token {
-        let position = self.pos;
-
         if !self.ch.is_lowercase() {
-            return Token {
-                kind: TokenKind::Illegal,
-                value: Some(self.ch.to_string()),
-                pos: position,
-            };
+            return Token::value(TokenKind::Illegal, self.ch);
         }
 
         let mut value = String::new();
@@ -176,36 +188,22 @@ impl Lexer {
         }
 
         if value == "forall" {
-            Token {
-                kind: TokenKind::Forall,
-                pos: position,
-                ..Default::default()
-            }
+            Token::new(TokenKind::Forall)
         } else if value == "exists" {
-            return Token {
-                kind: TokenKind::Exists,
-                pos: position,
-                ..Default::default()
-            };
+            Token::new(TokenKind::Exists)
         } else if value == "eval" {
-            return Token {
-                kind: TokenKind::Eval,
-                pos: position,
-                ..Default::default()
-            };
+            Token::new(TokenKind::Eval)
+        } else if value == "def" {
+            Token::new(TokenKind::Def)
         } else {
-            return Token {
-                kind: TokenKind::Identifier,
-                value: Some(value),
-                pos: position,
-            };
+            Token::value(TokenKind::Identifier, value)
         }
     }
 
-    pub fn new(input: String) -> Self {
+    pub fn new(file: SourceFile) -> Self {
         let mut lexer = Lexer {
-            filename: None,
-            input,
+            source_id: file.id,
+            input: file.content,
             pos: 0,
             read_pos: 0,
             ch: EOF,
@@ -216,73 +214,41 @@ impl Lexer {
         lexer
     }
 
-    pub fn with_filename(&mut self, filename: String) {
-        self.filename = Some(filename);
-    }
-
     pub fn next(&mut self) -> Token {
         self.skip_whitespace();
 
         let position = self.pos;
-        match self.ch {
-            EOF => Token {
-                kind: TokenKind::Eof,
-                pos: position,
-                ..Default::default()
-            },
+        let mut token = match self.ch {
+            EOF => Token::new(TokenKind::Eof),
             '#' => {
                 while self.ch != '\n' && self.ch != EOF {
                     self.read();
                 }
-                self.next() // Skip comments
+                return self.next(); // Skip comments
             }
             '{' => {
                 self.read();
-                Token {
-                    kind: TokenKind::LBrace,
-                    pos: position,
-                    ..Default::default()
-                }
+                Token::new(TokenKind::LBrace)
             }
             '}' => {
                 self.read();
-                Token {
-                    kind: TokenKind::RBrace,
-                    pos: position,
-                    ..Default::default()
-                }
+                Token::new(TokenKind::RBrace)
             }
             '(' => {
                 self.read();
-                Token {
-                    kind: TokenKind::LParen,
-                    pos: position,
-                    ..Default::default()
-                }
+                Token::new(TokenKind::LParen)
             }
             ')' => {
                 self.read();
-                Token {
-                    kind: TokenKind::RParen,
-                    pos: position,
-                    ..Default::default()
-                }
+                Token::new(TokenKind::RParen)
             }
             ',' => {
                 self.read();
-                Token {
-                    kind: TokenKind::Comma,
-                    pos: position,
-                    ..Default::default()
-                }
+                Token::new(TokenKind::Comma)
             }
             ':' => {
                 self.read();
-                Token {
-                    kind: TokenKind::Colon,
-                    pos: position,
-                    ..Default::default()
-                }
+                Token::new(TokenKind::Colon)
             }
             _ if issymbol(self.ch) => self.tokenize_symbol(),
             _ if self.ch.is_ascii_digit() => self.tokenize_number(),
@@ -290,12 +256,44 @@ impl Lexer {
             _ if self.ch.is_lowercase() => self.tokenize_identifier(),
             illegal => {
                 self.read();
-                Token {
-                    kind: TokenKind::Illegal,
-                    value: Some(illegal.to_string()),
-                    pos: position,
-                }
+                Token::value(TokenKind::Illegal, illegal)
             }
+        };
+
+        token.source_id = self.source_id;
+        token.pos = position;
+
+        token
+    }
+
+    pub fn display_tokens(&self, sourcemap: &SourceMap) {
+        let mut lexer = self.clone();
+
+        loop {
+            let token = lexer.next();
+            if token.kind == TokenKind::Eof {
+                break;
+            }
+
+            print!("{}: ", sourcemap.format_pos(&token));
+            println!("{}", token);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SourceFile {
+    pub id: usize,
+    pub filename: String,
+    pub content: String,
+}
+
+impl SourceFile {
+    pub fn new(id: usize, filename: String, content: String) -> Self {
+        SourceFile {
+            id,
+            filename,
+            content,
         }
     }
 
@@ -303,7 +301,7 @@ impl Lexer {
         let mut line = 1;
         let mut col = 1;
 
-        for (i, ch) in self.input.char_indices() {
+        for (i, ch) in self.content.char_indices() {
             if i >= pos {
                 break;
             }
@@ -317,31 +315,53 @@ impl Lexer {
 
         (line, col)
     }
+}
 
-    pub fn format_pos(&self, pos: usize) -> String {
-        let (line, col) = self.pos_to_lc(pos);
-        if let Some(filename) = &self.filename {
-            format!("{}:{}:{}", filename, line, col)
-        } else {
-            format!("{}:{}", line, col)
+#[derive(Debug, Clone, Default)]
+pub struct SourceMap {
+    pub files: Vec<SourceFile>,
+}
+
+impl SourceMap {
+    pub fn add_file<S>(&mut self, filename: Option<S>) -> io::Result<Lexer>
+    where
+        S: Into<String>
+    {
+        let id = self.files.len();
+        let filename = filename.map(|s| s.into());
+
+        let content = read_input(filename.clone())?;
+        let file = SourceFile::new(id, filename.unwrap_or_else(|| "<stdin>".to_string()), content);
+        self.files.push(file);
+
+        Ok(Lexer::new(self.files[id].clone()))
+    }
+
+    pub fn format_pos(&self, token: &Token) -> String {
+        let file = self
+            .files
+            .get(token.source_id)
+            .expect("Source file not found");
+
+        let (line, col) = file.pos_to_lc(token.pos);
+        format!("{}:{}:{}", file.filename, line, col)
+    }
+}
+
+fn read_input(path: Option<String>) -> io::Result<String> {
+    let mut buffer = String::new();
+
+    match path {
+        Some(p) => {
+            let mut file = File::open(p)?;
+            file.read_to_string(&mut buffer)?;
+        }
+        None => {
+            let stdin = io::stdin();
+            let mut handle = stdin.lock();
+            handle.read_to_string(&mut buffer)?;
         }
     }
 
-    pub fn display_tokens(&self) {
-        let mut lexer = self.clone();
-
-        loop {
-            let token = lexer.next();
-            if token.kind == TokenKind::Eof {
-                break;
-            }
-
-            let (line, col) = lexer.pos_to_lc(token.pos);
-            print!("Token: {:?}, ", token.kind);
-            if let Some(value) = &token.value {
-                print!("Value: '{value}', ");
-            }
-            println!("Position: ({}, {})", line, col);
-        }
-    }
+    Ok(buffer)
 }

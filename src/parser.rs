@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::lexer::{Lexer, Token, TokenKind};
+use crate::lexer::{Lexer, SourceMap, Token, TokenKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserError {
@@ -9,29 +9,28 @@ pub enum ParserError {
 
 pub struct Parser {
     lexer: Lexer,
+    sourcemap: SourceMap,
     token: Token,
     next_token: Token,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeNode {
-    pub types: Vec<String>,
+    pub types: Vec<Token>,
 }
 
 impl TypeNode {
-    pub fn new<S>(types: Vec<S>) -> Self
-    where
-        S: Into<String>,
+    pub fn new(types: Vec<Token>) -> Self
     {
         TypeNode {
-            types: types.into_iter().map(|s| s.into()).collect(),
+            types
         }
     }
 }
 
 impl Display for TypeNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.types.join(" -> "))
+        write!(f, "{}", self.types.iter().map(|t| t.value.clone().unwrap()).collect::<Vec<String>>().join(" -> "))
     }
 }
 
@@ -53,15 +52,15 @@ impl Display for QuantifierKind {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct QuantifierNode {
     pub kind: QuantifierKind,
-    pub variable: VariableNode,
+    pub symbol: Token,
     pub type_node: TypeNode,
 }
 
 impl QuantifierNode {
-    pub fn new(kind: QuantifierKind, variable: VariableNode, type_node: TypeNode) -> Self {
+    pub fn new(kind: QuantifierKind, symbol: Token, type_node: TypeNode) -> Self {
         QuantifierNode {
             kind,
-            variable,
+            symbol,
             type_node,
         }
     }
@@ -69,7 +68,7 @@ impl QuantifierNode {
 
 impl Display for QuantifierNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} : {}", self.kind, self.variable, self.type_node)
+        write!(f, "{} {} : {}", self.kind, self.symbol.value.clone().unwrap(), self.type_node)
     }
 }
 
@@ -93,59 +92,53 @@ impl Display for SetNode {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NumberNode {
-    pub value: String,
+    pub value: Token,
 }
 
 impl NumberNode {
-    pub fn new<S>(value: S) -> Self
-    where
-        S: Into<String>,
+    pub fn new(value: Token) -> Self
     {
         NumberNode {
-            value: value.into(),
+            value
         }
     }
 }
 
 impl Display for NumberNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
+        write!(f, "{}", self.value.value.clone().unwrap())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableNode {
-    pub name: String,
+    pub name: Token,
 }
 
 impl VariableNode {
-    pub fn new<S>(name: S) -> Self
-    where
-        S: Into<String>,
+    pub fn new(name: Token) -> Self
     {
-        VariableNode { name: name.into() }
+        VariableNode { name }
     }
 }
 
 impl Display for VariableNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)
+        write!(f, "{}", self.name.value.clone().unwrap())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionNode {
-    pub name: String,
+    pub name: Token,
     pub arguments: Vec<ExpressionNode>,
 }
 
 impl FunctionNode {
-    pub fn new<S>(name: S, arguments: Vec<ExpressionNode>) -> Self
-    where
-        S: Into<String>,
+    pub fn new(name: Token, arguments: Vec<ExpressionNode>) -> Self
     {
         FunctionNode {
-            name: name.into(),
+            name,
             arguments,
         }
     }
@@ -154,24 +147,22 @@ impl FunctionNode {
 impl Display for FunctionNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let args: Vec<String> = self.arguments.iter().map(|e| e.to_string()).collect();
-        write!(f, "{}({})", self.name, args.join(", "))
+        write!(f, "{}({})", self.name.value.clone().unwrap(), args.join(", "))
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OperatorNode {
-    pub operator: String,
+    pub operator: Token,
     pub left: Box<ExpressionNode>,
     pub right: Box<ExpressionNode>,
 }
 
 impl OperatorNode {
-    pub fn new<S>(operator: S, left: ExpressionNode, right: ExpressionNode) -> Self
-    where
-        S: Into<String>,
+    pub fn new(operator: Token, left: ExpressionNode, right: ExpressionNode) -> Self
     {
         OperatorNode {
-            operator: operator.into(),
+            operator,
             left: Box::new(left),
             right: Box::new(right),
         }
@@ -180,7 +171,7 @@ impl OperatorNode {
 
 impl Display for OperatorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} {}", self.left, self.operator, self.right)
+        write!(f, "{} {} {}", self.left, self.operator.value.clone().unwrap(), self.right)
     }
 }
 
@@ -214,6 +205,30 @@ pub enum ExpressionNode {
     Paren(ParenNode),
 }
 
+impl ExpressionNode {
+    pub fn degree(&self) -> u64 {
+        match self {
+            ExpressionNode::Set(set_node) => {
+                1 + set_node.elements.iter().map(|e| e.degree()).sum::<u64>()
+            }
+            ExpressionNode::Type(_) => 0,
+            ExpressionNode::Number(_) => 0,
+            ExpressionNode::Variable(_) => 1,
+            ExpressionNode::Function(function_node) => {
+                1 + function_node
+                    .arguments
+                    .iter()
+                    .map(|e| e.degree())
+                    .sum::<u64>()
+            }
+            ExpressionNode::Operator(operator_node) => {
+                1 + operator_node.left.degree() + operator_node.right.degree()
+            }
+            ExpressionNode::Paren(paren_node) => 1 + paren_node.expression.degree(),
+        }
+    }
+}
+
 impl Display for ExpressionNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -244,13 +259,14 @@ impl Display for RelationKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RelationNode {
     pub kind: RelationKind,
+    pub token: Token,
     pub left: ExpressionNode,
     pub right: ExpressionNode,
 }
 
 impl RelationNode {
-    pub fn new(kind: RelationKind, left: ExpressionNode, right: ExpressionNode) -> Self {
-        RelationNode { kind, left, right }
+    pub fn new(kind: RelationKind, token: Token, left: ExpressionNode, right: ExpressionNode) -> Self {
+        RelationNode { kind, token, left, right }
     }
 }
 
@@ -265,6 +281,7 @@ pub enum StatementNode {
     Quantifier(QuantifierNode),
     Relation(RelationNode),
 }
+
 impl Display for StatementNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -301,56 +318,78 @@ impl Display for ImplicationNode {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefineNode {
+    pub symbol: Token,
+    pub type_node: TypeNode,
+}
+
+impl DefineNode {
+    pub fn new(symbol: Token, type_node: TypeNode) -> Self
+    {
+        DefineNode {
+            symbol,
+            type_node,
+        }
+    }
+}
+
+impl Display for DefineNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} : {}", self.symbol.value.clone().unwrap(), self.type_node)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ProgramNode {
+    pub defines: Vec<DefineNode>,
     pub implications: Vec<ImplicationNode>,
     pub evaluations: Vec<ExpressionNode>,
 }
 
 impl ProgramNode {
-    pub fn new(implications: Vec<ImplicationNode>, evaluations: Vec<ExpressionNode>) -> Self {
+    pub fn new(
+        defines: Vec<DefineNode>,
+        implications: Vec<ImplicationNode>,
+        evaluations: Vec<ExpressionNode>,
+    ) -> Self {
         ProgramNode {
+            defines,
             implications,
             evaluations,
         }
     }
-}
 
-impl ExpressionNode {
-    pub fn degree(&self) -> u64 {
-        match self {
-            ExpressionNode::Set(set_node) => {
-                1 + set_node.elements.iter().map(|e| e.degree()).sum::<u64>()
-            }
-            ExpressionNode::Type(_) => 0,
-            ExpressionNode::Number(_) => 0,
-            ExpressionNode::Variable(_) => 1,
-            ExpressionNode::Function(function_node) => {
-                1 + function_node
-                    .arguments
-                    .iter()
-                    .map(|e| e.degree())
-                    .sum::<u64>()
-            }
-            ExpressionNode::Operator(operator_node) => {
-                1 + operator_node.left.degree() + operator_node.right.degree()
-            }
-            ExpressionNode::Paren(paren_node) => 1 + paren_node.expression.degree(),
-        }
-    }
-}
-
-impl ProgramNode {
     pub fn merge(&mut self, other: ProgramNode) {
+        self.defines.extend(other.defines);
         self.implications.extend(other.implications);
         self.evaluations.extend(other.evaluations);
     }
 }
 
+impl Display for ProgramNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for define in &self.defines {
+            writeln!(f, "def {}", define)?;
+        }
+
+        for implication in &self.implications {
+            writeln!(f, "{}", implication)?;
+        }
+
+        for eval in &self.evaluations {
+            writeln!(f, "eval {}", eval)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl Parser {
-    pub fn new(lexer: Lexer) -> Self {
+    pub fn new(lexer: Lexer, sourcemap: &SourceMap) -> Self {
         let mut parser = Parser {
             lexer,
+            sourcemap: sourcemap.clone(),
             token: Token::default(),
             next_token: Token::default(),
         };
@@ -376,14 +415,14 @@ impl Parser {
             if self.token.kind != TokenKind::Type {
                 return Err(ParserError::Todo(format!(
                     "{}, Expected type, found {:?}",
-                    self.lexer.format_pos(self.token.pos),
+                    self.sourcemap.format_pos(&self.token),
                     self.token.kind
                 )));
             }
-            let type_value = self.token.value.clone().unwrap();
+            let type_node = self.token.clone();
             self.read(); // consume the type token
 
-            types.push(type_value);
+            types.push(type_node);
 
             if self.token.kind == TokenKind::Arrow {
                 self.read(); // consume the arrow token
@@ -403,27 +442,30 @@ impl Parser {
             otherwise => {
                 return Err(ParserError::Todo(format!(
                     "{}, Expected quantifier (forall or exists), found {:?}",
-                    self.lexer.format_pos(self.token.pos),
+                    self.sourcemap.format_pos(&self.token),
                     otherwise
                 )));
             }
         };
         self.read(); // consume the quantifier token
 
-        if self.token.kind != TokenKind::Identifier {
-            return Err(ParserError::Todo(format!(
-                "{}, Expected variable after quantifier, found {:?}",
-                self.lexer.format_pos(self.token.pos),
-                self.token.kind
-            )));
-        }
-        let variable = self.token.value.clone().unwrap();
+        let symbol = match &self.token.kind {
+            TokenKind::Identifier => self.token.clone(),
+            TokenKind::Operator => self.token.clone(),
+            otherwise => {
+                return Err(ParserError::Todo(format!(
+                    "{}, Expected identifier after quantifier, found {:?}",
+                    self.sourcemap.format_pos(&self.token),
+                    otherwise
+                )));
+            }
+        };
         self.read(); // consume the variable token
 
         if self.token.kind != TokenKind::Colon {
             return Err(ParserError::Todo(format!(
                 "{}, Expected ':' after variable, found {:?}",
-                self.lexer.format_pos(self.token.pos),
+                self.sourcemap.format_pos(&self.token),
                 self.token.kind
             )));
         }
@@ -431,11 +473,7 @@ impl Parser {
 
         let type_node = self.parse_type()?;
 
-        Ok(QuantifierNode::new(
-            kind,
-            VariableNode::new(variable),
-            type_node,
-        ))
+        Ok(QuantifierNode::new(kind, symbol, type_node))
     }
 
     fn parse_expression(&mut self) -> Result<ExpressionNode, ParserError> {
@@ -467,7 +505,7 @@ impl Parser {
                     } else {
                         return Err(ParserError::Todo(format!(
                             "{}, Expected ',' or '}}', found {:?}",
-                            self.lexer.format_pos(self.token.pos),
+                            self.sourcemap.format_pos(&self.token),
                             self.token.kind
                         )));
                     }
@@ -476,13 +514,13 @@ impl Parser {
                 ExpressionNode::Set(SetNode::new(elements))
             }
             TokenKind::Number => {
-                let value = self.token.value.clone().unwrap();
+                let value = self.token.clone();
                 self.read(); // consume the number token
 
                 ExpressionNode::Number(NumberNode::new(value))
             }
             TokenKind::Identifier => {
-                let name = self.token.value.clone().unwrap();
+                let name = self.token.clone();
                 self.read(); // consume the identifier token
 
                 match self.token.kind {
@@ -502,7 +540,7 @@ impl Parser {
                             } else {
                                 return Err(ParserError::Todo(format!(
                                     "{}, Expected ',' or ')', found {:?}",
-                                    self.lexer.format_pos(self.token.pos),
+                                    self.sourcemap.format_pos(&self.token),
                                     self.token.kind
                                 )));
                             }
@@ -520,7 +558,7 @@ impl Parser {
                 if self.token.kind != TokenKind::RParen {
                     return Err(ParserError::Todo(format!(
                         "{}, Expected ')', found {:?}",
-                        self.lexer.format_pos(self.token.pos),
+                        self.sourcemap.format_pos(&self.token),
                         self.token.kind
                     )));
                 }
@@ -531,7 +569,7 @@ impl Parser {
             otherwise => {
                 return Err(ParserError::Todo(format!(
                     "{}, Expected expression, found {:?}",
-                    self.lexer.format_pos(self.token.pos),
+                    self.sourcemap.format_pos(&self.token),
                     otherwise
                 )));
             }
@@ -539,7 +577,7 @@ impl Parser {
 
         let expr = match self.token.kind {
             TokenKind::Operator => {
-                let operator = self.token.value.clone().unwrap();
+                let operator = self.token.clone();
                 self.read(); // consume the operator token
 
                 let right_expr = self.parse_expression()?;
@@ -556,7 +594,8 @@ impl Parser {
         // relation ::= expression = expression
         let lhs = self.parse_expression()?;
 
-        let kind = match &self.token.kind {
+        let token = self.token.clone();
+        let kind = match token.kind {
             TokenKind::Equal => {
                 self.read(); // consume the equal token
                 RelationKind::Equality
@@ -564,7 +603,7 @@ impl Parser {
             otherwise => {
                 return Err(ParserError::Todo(format!(
                     "{}, Expected '=', found {:?}",
-                    self.lexer.format_pos(self.token.pos),
+                    self.sourcemap.format_pos(&self.token),
                     otherwise
                 )));
             }
@@ -572,7 +611,7 @@ impl Parser {
 
         let rhs = self.parse_expression()?;
 
-        Ok(RelationNode::new(kind, lhs, rhs))
+        Ok(RelationNode::new(kind, token, lhs, rhs))
     }
 
     fn parse_statement(&mut self) -> Result<StatementNode, ParserError> {
@@ -630,7 +669,36 @@ impl Parser {
         Ok(ImplicationNode::new(conditions, conclusion))
     }
 
+    fn parse_define(&mut self) -> Result<DefineNode, ParserError> {
+        let symbol = match &self.token.kind {
+            TokenKind::Identifier => self.token.clone(),
+            TokenKind::Operator => self.token.clone(),
+            otherwise => {
+                return Err(ParserError::Todo(format!(
+                    "{}, Expected identifier or operator, found {:?}",
+                    self.sourcemap.format_pos(&self.token),
+                    otherwise
+                )));
+            }
+        };
+        self.read(); // consume the identifier token
+
+        if self.token.kind != TokenKind::Colon {
+            return Err(ParserError::Todo(format!(
+                "{}, Expected ':' after variable, found {:?}",
+                self.sourcemap.format_pos(&self.token),
+                self.token.kind
+            )));
+        }
+        self.read(); // consume the colon token
+
+        let type_node = self.parse_type()?;
+
+        Ok(DefineNode::new(symbol, type_node))
+    }
+
     pub fn parse(&mut self) -> Result<ProgramNode, ParserError> {
+        let mut defines = Vec::new();
         let mut implications = Vec::new();
         let mut evaluations = Vec::new();
 
@@ -643,6 +711,12 @@ impl Parser {
 
                     evaluations.push(expr);
                 }
+                TokenKind::Def => {
+                    self.read(); // consume the def token
+                    let define = self.parse_define()?;
+
+                    defines.push(define);
+                }
                 _ => {
                     let value = self.parse_implication()?;
 
@@ -651,6 +725,6 @@ impl Parser {
             }
         }
 
-        Ok(ProgramNode::new(implications, evaluations))
+        Ok(ProgramNode::new(defines, implications, evaluations))
     }
 }
