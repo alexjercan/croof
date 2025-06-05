@@ -59,10 +59,7 @@ fn main() -> io::Result<()> {
 
     let typechecker = Typechecker::new(ast.defines.clone(), &sourcemap);
     for implication in &ast.implications {
-        match typechecker.check(implication) {
-            Ok(_) => println!("Typechecker OK"),
-            Err(error) => println!("{:?}", error),
-        }
+        typechecker.check(implication);
     }
 
     if args.typechecker {
