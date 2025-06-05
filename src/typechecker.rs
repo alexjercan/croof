@@ -2,6 +2,9 @@ use std::collections::HashMap;
 
 use crate::{lexer::{SourceMap, Token, TokenKind}, parser::{DefineNode, ExpressionNode, ImplicationNode, StatementNode, TypeNode}};
 
+pub const FUNCTION_SUCC: &str = "succ";
+pub const TYPE_N: &str = "N";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypecheckerError {
     Todo(String),
@@ -14,12 +17,25 @@ pub struct Typechecker {
 
 impl Typechecker {
     pub fn new(defines: Vec<DefineNode>, sourcemap: &SourceMap) -> Self {
+        let mut defines = defines
+            .iter()
+            .map(|define| (define.symbol.value.clone().unwrap(), define.type_node.clone()))
+            .collect::<HashMap<_, _>>();
+
+        // def succ : N -> N
+        defines.insert(
+            FUNCTION_SUCC.to_string(),
+            TypeNode::new(
+                vec![
+                    Token::value(TokenKind::Type, TYPE_N),
+                    Token::value(TokenKind::Type, TYPE_N),
+                ]
+            ),
+        );
+
         Typechecker {
             sourcemap: sourcemap.clone(),
-            defines: defines
-                .iter()
-                .map(|define| (define.symbol.value.clone().unwrap(), define.type_node.clone()))
-                .collect(),
+            defines,
         }
     }
 
@@ -31,7 +47,7 @@ impl Typechecker {
         match expression {
             ExpressionNode::Set(set_node) => todo!(),
             ExpressionNode::Type(type_node) => todo!(),
-            ExpressionNode::Number(_) => Ok(TypeNode::new(vec![Token::value(TokenKind::Type, "N")])),
+            ExpressionNode::Number(_) => Ok(TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_N)])),
             ExpressionNode::Variable(variable_node) => {
                 symbols
                     .get(&variable_node.name.value.clone().unwrap())

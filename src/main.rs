@@ -71,14 +71,11 @@ fn main() -> io::Result<()> {
 
     let solver = Solver::new(ast.implications.clone());
     for expression in &ast.evaluations {
-        match solver.solve(expression) {
+        match solver.solve_bfs(expression) {
             Ok((steps, result)) => {
                 println!("Expression: {}", expression);
-                for (parent, implication_index) in steps {
-                    println!(
-                        "  - {} (apply {} [{}])",
-                        parent, ast.implications[implication_index], implication_index
-                    );
+                for (parent, implication) in steps {
+                    println!("  - {} (apply {})", parent, implication);
                 }
                 println!("Result: {}", result);
             }

@@ -100,7 +100,7 @@ pub struct Lexer {
 }
 
 fn issymbol(c: char) -> bool {
-    c == '+' || c == '-' || c == '*' || c == '/' || c == '=' || c == '<' || c == '>'
+    c == '+' || c == '-' || c == '*' || c == '/' || c == '=' || c == '<' || c == '>' || c == '^'
 }
 
 impl Lexer {
