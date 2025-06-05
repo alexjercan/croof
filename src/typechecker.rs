@@ -34,19 +34,25 @@ impl Typechecker {
         }
     }
 
-    fn check_expression(
+    pub fn check_expression(
         &self,
-        expression: &ExpressionNode,
+        expression: &mut ExpressionNode,
         symbols: &HashMap<String, TypeNode>,
     ) -> Option<TypeNode> {
         match expression {
             ExpressionNode::Set(set_node) => todo!(),
             ExpressionNode::Type(type_node) => todo!(),
-            ExpressionNode::Number(_) => Some(TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_N)])),
+            ExpressionNode::Number(number_node) => {
+                let type_node = Some(TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_N)]));
+
+                number_node.type_node = type_node.clone();
+
+                type_node
+            },
             ExpressionNode::Variable(variable_node) => {
                 let name = variable_node.name.value.clone().unwrap();
 
-                match symbols.get(&name) {
+                let type_node = match symbols.get(&name) {
                     Some(type_node) => Some(type_node.clone()),
                     None => {
                         eprintln!(
@@ -56,7 +62,11 @@ impl Typechecker {
                         );
                         None
                     }
-                }
+                };
+
+                variable_node.type_node = type_node.clone();
+
+                type_node
             }
             ExpressionNode::Function(function_node) => {
                 let name = function_node.name.value.clone().unwrap();
@@ -75,7 +85,7 @@ impl Typechecker {
 
                 let (function_type, arg_types) = function_type.types.split_last().unwrap();
 
-                for (i, arg) in function_node.arguments.iter().enumerate() {
+                for (i, arg) in function_node.arguments.iter_mut().enumerate() {
                     let Some(arg_type) = self.check_expression(arg, symbols) else {
                         continue
                     };
@@ -91,7 +101,11 @@ impl Typechecker {
                     }
                 }
 
-                Some(TypeNode::new(vec![function_type.clone()]))
+                let type_node = Some(TypeNode::new(vec![function_type.clone()]));
+
+                function_node.type_node = type_node.clone();
+
+                type_node
             }
             ExpressionNode::Operator(operator_node) => {
                 let operator = operator_node.operator.value.clone().unwrap();
@@ -108,7 +122,7 @@ impl Typechecker {
                     return None;
                 };
 
-                match self.check_expression(&operator_node.left, symbols) {
+                match self.check_expression(&mut operator_node.left, symbols) {
                     Some(left_type) => {
                         if left_type.types.len() != 1 || left_type.types[0].value != operator_type.types[0].value {
                             eprintln!(
@@ -123,7 +137,7 @@ impl Typechecker {
                     None => {},
                 }
 
-                match self.check_expression(&operator_node.right, symbols) {
+                match self.check_expression(&mut operator_node.right, symbols) {
                     Some(right_type) => {
                         if right_type.types.len() != 1 || right_type.types[0].value != operator_type.types[1].value {
                             eprintln!(
@@ -138,17 +152,25 @@ impl Typechecker {
                     None => {},
                 }
 
-                Some(TypeNode::new(vec![operator_type.types[2].clone()]))
+                let type_node = Some(TypeNode::new(vec![operator_type.types[2].clone()]));
+
+                operator_node.type_node = type_node.clone();
+
+                type_node
             }
             ExpressionNode::Paren(paren_node) => {
-                self.check_expression(&paren_node.expression, symbols)
+                let type_node = self.check_expression(&mut paren_node.expression, symbols);
+
+                paren_node.type_node = type_node.clone();
+
+                type_node
             }
         }
     }
 
     fn check_statement(
         &self,
-        statement: &StatementNode,
+        statement: &mut StatementNode,
         symbols: &mut HashMap<String, TypeNode>,
     ) {
         match statement {
@@ -159,8 +181,8 @@ impl Typechecker {
                 );
             }
             StatementNode::Relation(relation_node) => {
-                let left_type = self.check_expression(&relation_node.left, symbols);
-                let right_type = self.check_expression(&relation_node.right, symbols);
+                let left_type = self.check_expression(&mut relation_node.left, symbols);
+                let right_type = self.check_expression(&mut relation_node.right, symbols);
 
                 match (left_type, right_type) {
                     (Some(left_type), Some(right_type)) => {
@@ -179,14 +201,14 @@ impl Typechecker {
         };
     }
 
-    pub fn check(&self, implication: &ImplicationNode) {
+    pub fn check(&self, implication: &mut ImplicationNode) {
         let mut symbols: HashMap<String, TypeNode> = HashMap::new();
 
-        for condition in &implication.conditions {
+        for condition in &mut implication.conditions {
             self.check_statement(condition, &mut symbols);
         }
 
-        for conclusion in &implication.conclusion {
+        for conclusion in &mut implication.conclusion {
             self.check_statement(conclusion, &mut symbols);
         }
     }

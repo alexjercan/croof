@@ -93,13 +93,15 @@ impl Display for SetNode {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NumberNode {
     pub value: Token,
+    pub type_node: Option<TypeNode>,
 }
 
 impl NumberNode {
     pub fn new(value: Token) -> Self
     {
         NumberNode {
-            value
+            value,
+            type_node: None,
         }
     }
 }
@@ -113,12 +115,13 @@ impl Display for NumberNode {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableNode {
     pub name: Token,
+    pub type_node: Option<TypeNode>,
 }
 
 impl VariableNode {
     pub fn new(name: Token) -> Self
     {
-        VariableNode { name }
+        VariableNode { name, type_node: None }
     }
 }
 
@@ -132,6 +135,7 @@ impl Display for VariableNode {
 pub struct FunctionNode {
     pub name: Token,
     pub arguments: Vec<ExpressionNode>,
+    pub type_node: Option<TypeNode>,
 }
 
 impl FunctionNode {
@@ -140,6 +144,7 @@ impl FunctionNode {
         FunctionNode {
             name,
             arguments,
+            type_node: None,
         }
     }
 }
@@ -156,6 +161,7 @@ pub struct OperatorNode {
     pub operator: Token,
     pub left: Box<ExpressionNode>,
     pub right: Box<ExpressionNode>,
+    pub type_node: Option<TypeNode>,
 }
 
 impl OperatorNode {
@@ -165,6 +171,7 @@ impl OperatorNode {
             operator,
             left: Box::new(left),
             right: Box::new(right),
+            type_node: None,
         }
     }
 }
@@ -178,12 +185,14 @@ impl Display for OperatorNode {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParenNode {
     pub expression: Box<ExpressionNode>,
+    pub type_node: Option<TypeNode>,
 }
 
 impl ParenNode {
     pub fn new(expression: ExpressionNode) -> Self {
         ParenNode {
             expression: Box::new(expression),
+            type_node: None,
         }
     }
 }

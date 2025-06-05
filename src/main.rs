@@ -58,7 +58,7 @@ fn main() -> io::Result<()> {
     }
 
     let typechecker = Typechecker::new(ast.defines.clone(), &sourcemap);
-    for implication in &ast.implications {
+    for implication in &mut ast.implications {
         typechecker.check(implication);
     }
 
