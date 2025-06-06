@@ -1,0 +1,2 @@
+tests/01-lexer/02-string.croof:1:1: Literal("hello")
+tests/01-lexer/02-string.croof:2:1: Literal("world")

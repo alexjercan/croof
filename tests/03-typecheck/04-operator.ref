@@ -1,0 +1,2 @@
+tests/03-typecheck/04-operator.croof:5:3, Right Type A is different than Operator + Right Type N
+tests/03-typecheck/04-operator.croof:5:9, Left Type N is different than Right Type A

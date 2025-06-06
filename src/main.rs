@@ -1,5 +1,5 @@
 use clap::Parser as ArgParser;
-use std::io;
+use std::{collections::HashMap, io};
 use typechecker::Typechecker;
 
 mod lexer;
@@ -26,7 +26,7 @@ struct Args {
     parser: bool,
     /// Stop at the typechecker stage
     #[arg(long, short = 't')]
-    typechecker: bool,
+    typecheck: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -62,7 +62,11 @@ fn main() -> io::Result<()> {
         typechecker.check(implication);
     }
 
-    if args.typechecker {
+    for eval in &mut ast.evaluations {
+        typechecker.check_expression(eval, &HashMap::default());
+    }
+
+    if args.typecheck {
         return Ok(());
     }
 

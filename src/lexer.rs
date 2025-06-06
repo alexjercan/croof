@@ -21,6 +21,7 @@ pub enum TokenKind {
     Then,
     Operator,
     Number,
+    Literal,
     Type,
     Identifier,
     Forall,
@@ -60,8 +61,12 @@ impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.kind)?;
         if let Some(ref value) = self.value {
-            write!(f, "({})", value)?;
+            match self.kind {
+                TokenKind::Literal => write!(f, "(\"{}\")", value),
+                _ => write!(f, "({})", value),
+            }?;
         }
+
         Ok(())
     }
 }
@@ -100,7 +105,7 @@ pub struct Lexer {
 }
 
 fn issymbol(c: char) -> bool {
-    c == '+' || c == '-' || c == '*' || c == '/' || c == '=' || c == '<' || c == '>' || c == '^'
+    "+-*/=<>^&".contains(c)
 }
 
 impl Lexer {
@@ -200,6 +205,27 @@ impl Lexer {
         }
     }
 
+    fn tokenize_string(&mut self) -> Token {
+        if self.ch != '"' {
+            return Token::value(TokenKind::Illegal, self.ch);
+        }
+        self.read();
+
+        let mut value = String::new();
+        while self.ch != '"' {
+            let ch = match self.ch {
+                '\\' => self.read(),
+                ch => ch,
+            };
+
+            value.push(ch);
+            self.read();
+        }
+        self.read();
+
+        Token::value(TokenKind::Literal, value)
+    }
+
     pub fn new(file: SourceFile) -> Self {
         let mut lexer = Lexer {
             source_id: file.id,
@@ -250,6 +276,7 @@ impl Lexer {
                 self.read();
                 Token::new(TokenKind::Colon)
             }
+            '"' => self.tokenize_string(),
             _ if issymbol(self.ch) => self.tokenize_symbol(),
             _ if self.ch.is_ascii_digit() => self.tokenize_number(),
             _ if self.ch.is_uppercase() => self.tokenize_type(),
@@ -325,13 +352,17 @@ pub struct SourceMap {
 impl SourceMap {
     pub fn add_file<S>(&mut self, filename: Option<S>) -> io::Result<Lexer>
     where
-        S: Into<String>
+        S: Into<String>,
     {
         let id = self.files.len();
         let filename = filename.map(|s| s.into());
 
         let content = read_input(filename.clone())?;
-        let file = SourceFile::new(id, filename.unwrap_or_else(|| "<stdin>".to_string()), content);
+        let file = SourceFile::new(
+            id,
+            filename.unwrap_or_else(|| "<stdin>".to_string()),
+            content,
+        );
         self.files.push(file);
 
         Ok(Lexer::new(self.files[id].clone()))

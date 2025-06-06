@@ -1,0 +1,2 @@
+forall a : N => 0 + a = a
+

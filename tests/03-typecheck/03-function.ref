@@ -1,0 +1,1 @@
+tests/03-typecheck/03-function.croof:5:3, Argument 0 Type N is different than Function Type A

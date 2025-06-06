@@ -1,11 +1,12 @@
-use std::{collections::{HashMap, HashSet, VecDeque}, error::Error};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::{
     lexer::{Token, TokenKind},
     parser::{
         ExpressionNode, FunctionNode, ImplicationNode, NumberNode, OperatorNode, ParenNode,
         RelationKind, RelationNode, StatementNode,
-    }, typechecker::FUNCTION_SUCC,
+    },
+    typechecker::FUNCTION_SUCC,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +28,12 @@ fn create_mapping_helper(
         ExpressionNode::Type(_) => todo!(),
         ExpressionNode::Number(to_node) => match from {
             ExpressionNode::Number(from_node) => to_node.value == from_node.value,
+            _ => false,
+        },
+        ExpressionNode::Literal(to_node) => match from {
+            ExpressionNode::Literal(from_node) => {
+                to_node.value == from_node.value && to_node.type_node == from_node.type_node
+            }
             _ => false,
         },
         ExpressionNode::Variable(_) => {
@@ -88,6 +95,7 @@ fn apply_mapping(
         ExpressionNode::Set(_) => todo!(),
         ExpressionNode::Type(_) => todo!(),
         ExpressionNode::Number(_) => Some(expression.clone()),
+        ExpressionNode::Literal(_) => Some(expression.clone()),
         ExpressionNode::Variable(_) => mapping.get(expression).cloned(),
         ExpressionNode::Function(function_node) => {
             let args = function_node
@@ -131,6 +139,13 @@ fn substitute_helper(
         ExpressionNode::Set(_) => todo!(),
         ExpressionNode::Type(_) => todo!(),
         ExpressionNode::Number(_) => {
+            if let Some(mapping) = create_mapping(expression, &relation.left) {
+                if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
+                    substitutions.push(substituted);
+                }
+            }
+        }
+        ExpressionNode::Literal(_) => {
             if let Some(mapping) = create_mapping(expression, &relation.left) {
                 if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
                     substitutions.push(substituted);
@@ -209,8 +224,8 @@ fn substitute_builtin_helper(
     substitutions: &mut Vec<(ExpressionNode, ImplicationNode)>,
 ) {
     match expression {
-        ExpressionNode::Set(set_node) => todo!(),
-        ExpressionNode::Type(type_node) => todo!(),
+        ExpressionNode::Set(_) => todo!(),
+        ExpressionNode::Type(_) => todo!(),
         ExpressionNode::Number(expr_node) => {
             let value = expr_node.value.value.clone().unwrap();
             let value = value.parse::<u64>().unwrap();
@@ -238,35 +253,36 @@ fn substitute_builtin_helper(
 
             substitutions.push((substitution.clone(), implication));
         }
+        ExpressionNode::Literal(_) => {}
         ExpressionNode::Variable(_) => {}
         ExpressionNode::Function(expr_node) => {
-            match expr_node.name.value.clone().unwrap().as_ref() {
-                FUNCTION_SUCC => {
-                    match expr_node.arguments.first().unwrap() {
-                        ExpressionNode::Number(number_node) => {
-                            let value = number_node.value.value.clone().unwrap().parse::<u64>().unwrap();
+            if expr_node.name.value.clone().unwrap() == FUNCTION_SUCC {
+                if let ExpressionNode::Number(number_node) = expr_node.arguments.first().unwrap() {
+                    let value = number_node
+                        .value
+                        .value
+                        .clone()
+                        .unwrap()
+                        .parse::<u64>()
+                        .unwrap();
 
-                            let substitution = ExpressionNode::Number(NumberNode::new(Token::value(
-                                TokenKind::Number,
-                                (value + 1).to_string(),
-                            )));
+                    let substitution = ExpressionNode::Number(NumberNode::new(Token::value(
+                        TokenKind::Number,
+                        (value + 1).to_string(),
+                    )));
 
-                            let implication = ImplicationNode::new(
-                                vec![],
-                                vec![StatementNode::Relation(RelationNode::new(
-                                    RelationKind::Equality,
-                                    Token::new(TokenKind::Equal),
-                                    expression.clone(),
-                                    substitution.clone(),
-                                ))],
-                            );
+                    let implication = ImplicationNode::new(
+                        vec![],
+                        vec![StatementNode::Relation(RelationNode::new(
+                            RelationKind::Equality,
+                            Token::new(TokenKind::Equal),
+                            expression.clone(),
+                            substitution.clone(),
+                        ))],
+                    );
 
-                            substitutions.push((substitution.clone(), implication));
-                        },
-                        _ => {}
-                    }
+                    substitutions.push((substitution.clone(), implication));
                 }
-                _ => {}
             }
         }
         ExpressionNode::Operator(expr_node) => {
@@ -283,7 +299,7 @@ fn substitute_builtin_helper(
                 *new_expr.right = right_expr;
                 substitutions.push((ExpressionNode::Operator(new_expr.clone()), right_impl));
             }
-        },
+        }
         ExpressionNode::Paren(_) => {}
     }
 }
@@ -314,39 +330,6 @@ fn trace_steps(
 impl Solver {
     pub fn new(implications: Vec<ImplicationNode>) -> Self {
         Solver { implications }
-    }
-
-    fn solve_dfs_helper(
-        &self,
-        expression: &ExpressionNode,
-        visited: &mut HashSet<ExpressionNode>,
-        parent: &mut HashMap<ExpressionNode, (ExpressionNode, ImplicationNode)>,
-        depth: usize,
-    ) {
-        if depth > 50 {
-            return; // Prevent deep recursion
-        }
-
-        visited.insert(expression.clone());
-
-        for (substitution, implication) in substitute_builtin(expression) {
-            if !visited.contains(&substitution) {
-                parent.insert(substitution.clone(), (expression.clone(), implication));
-                self.solve_dfs_helper(&substitution, visited, parent, depth + 1);
-            }
-        }
-
-        for implication in &self.implications {
-            for substitution in substitute(expression, implication) {
-                if !visited.contains(&substitution) {
-                    parent.insert(
-                        substitution.clone(),
-                        (expression.clone(), implication.clone()),
-                    );
-                    self.solve_dfs_helper(&substitution, visited, parent, depth + 1);
-                }
-            }
-        }
     }
 
     pub fn solve_bfs(
@@ -389,25 +372,10 @@ impl Solver {
             }
         }
 
-        Err(SolverError::Todo(format!("No solution was found for {}", expression)))
-    }
-
-    pub fn solve_dfs(
-        &self,
-        expression: &ExpressionNode,
-    ) -> Result<(Vec<(ExpressionNode, ImplicationNode)>, ExpressionNode), SolverError> {
-        let mut visited = HashSet::new();
-        let mut parent = HashMap::new();
-
-        self.solve_dfs_helper(expression, &mut visited, &mut parent, 0);
-
-        let result = visited
-            .iter()
-            .min_by_key(|e| e.degree())
-            .ok_or(SolverError::Todo("No solution found".to_string()))?;
-        let steps = trace_steps(&parent, result);
-
-        Ok((steps, result.clone()))
+        Err(SolverError::Todo(format!(
+            "No solution was found for {}",
+            expression
+        )))
     }
 }
 

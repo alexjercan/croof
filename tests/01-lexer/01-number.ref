@@ -1,0 +1,3 @@
+tests/01-lexer/01-number.croof:1:1: Number(1)
+tests/01-lexer/01-number.croof:2:1: Number(2)
+tests/01-lexer/01-number.croof:3:1: Number(3)

@@ -1,0 +1,9 @@
+forall a : N => (a) = a
+
+def + : N -> N -> N
+
+forall a : N               => 0 + a = a
+forall a : N, forall b : N => succ(a) + b = a + succ(b)
+
+forall a : N, forall b : N => a + b = b + a
+forall a : N, forall b : N, forall c : N => (a + b) + c = a + (b + c)

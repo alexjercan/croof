@@ -1,0 +1,16 @@
+def Bool = {"true", "false"}
+def Animals = {"fox"}
+
+def zero : N -> Bool
+zero(0) = "true"
+forall a : N => zero(a) = "false"
+
+def && : Bool -> Bool -> Bool
+
+"true" && "true" = "true"
+"true" && "false" = "false"
+"false" && "true" = "false"
+"false" && "false" = "false"
+
+eval zero(0)
+eval "true" && "true" && "false"

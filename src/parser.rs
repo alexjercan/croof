@@ -20,17 +20,22 @@ pub struct TypeNode {
 }
 
 impl TypeNode {
-    pub fn new(types: Vec<Token>) -> Self
-    {
-        TypeNode {
-            types
-        }
+    pub fn new(types: Vec<Token>) -> Self {
+        TypeNode { types }
     }
 }
 
 impl Display for TypeNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.types.iter().map(|t| t.value.clone().unwrap()).collect::<Vec<String>>().join(" -> "))
+        write!(
+            f,
+            "{}",
+            self.types
+                .iter()
+                .map(|t| t.value.clone().unwrap())
+                .collect::<Vec<String>>()
+                .join(" -> ")
+        )
     }
 }
 
@@ -68,7 +73,13 @@ impl QuantifierNode {
 
 impl Display for QuantifierNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} : {}", self.kind, self.symbol.value.clone().unwrap(), self.type_node)
+        write!(
+            f,
+            "{} {} : {}",
+            self.kind,
+            self.symbol.value.clone().unwrap(),
+            self.type_node
+        )
     }
 }
 
@@ -97,8 +108,7 @@ pub struct NumberNode {
 }
 
 impl NumberNode {
-    pub fn new(value: Token) -> Self
-    {
+    pub fn new(value: Token) -> Self {
         NumberNode {
             value,
             type_node: None,
@@ -113,15 +123,39 @@ impl Display for NumberNode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LiteralNode {
+    pub value: Token,
+    pub type_node: Option<TypeNode>,
+}
+
+impl LiteralNode {
+    pub fn new(value: Token) -> Self {
+        LiteralNode {
+            value,
+            type_node: None,
+        }
+    }
+}
+
+impl Display for LiteralNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO: just for visuals maybe escape the string
+        write!(f, "\"{}\"", self.value.value.clone().unwrap())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableNode {
     pub name: Token,
     pub type_node: Option<TypeNode>,
 }
 
 impl VariableNode {
-    pub fn new(name: Token) -> Self
-    {
-        VariableNode { name, type_node: None }
+    pub fn new(name: Token) -> Self {
+        VariableNode {
+            name,
+            type_node: None,
+        }
     }
 }
 
@@ -139,8 +173,7 @@ pub struct FunctionNode {
 }
 
 impl FunctionNode {
-    pub fn new(name: Token, arguments: Vec<ExpressionNode>) -> Self
-    {
+    pub fn new(name: Token, arguments: Vec<ExpressionNode>) -> Self {
         FunctionNode {
             name,
             arguments,
@@ -152,7 +185,12 @@ impl FunctionNode {
 impl Display for FunctionNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let args: Vec<String> = self.arguments.iter().map(|e| e.to_string()).collect();
-        write!(f, "{}({})", self.name.value.clone().unwrap(), args.join(", "))
+        write!(
+            f,
+            "{}({})",
+            self.name.value.clone().unwrap(),
+            args.join(", ")
+        )
     }
 }
 
@@ -165,8 +203,7 @@ pub struct OperatorNode {
 }
 
 impl OperatorNode {
-    pub fn new(operator: Token, left: ExpressionNode, right: ExpressionNode) -> Self
-    {
+    pub fn new(operator: Token, left: ExpressionNode, right: ExpressionNode) -> Self {
         OperatorNode {
             operator,
             left: Box::new(left),
@@ -178,7 +215,13 @@ impl OperatorNode {
 
 impl Display for OperatorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} {}", self.left, self.operator.value.clone().unwrap(), self.right)
+        write!(
+            f,
+            "{} {} {}",
+            self.left,
+            self.operator.value.clone().unwrap(),
+            self.right
+        )
     }
 }
 
@@ -208,6 +251,7 @@ pub enum ExpressionNode {
     Set(SetNode),
     Type(TypeNode),
     Number(NumberNode),
+    Literal(LiteralNode),
     Variable(VariableNode),
     Function(FunctionNode),
     Operator(OperatorNode),
@@ -222,6 +266,7 @@ impl ExpressionNode {
             }
             ExpressionNode::Type(_) => 0,
             ExpressionNode::Number(_) => 0,
+            ExpressionNode::Literal(_) => 0,
             ExpressionNode::Variable(_) => 1,
             ExpressionNode::Function(function_node) => {
                 1 + function_node
@@ -236,6 +281,19 @@ impl ExpressionNode {
             ExpressionNode::Paren(paren_node) => 1 + paren_node.expression.degree(),
         }
     }
+
+    pub fn token(&self) -> Token {
+        match &self {
+            ExpressionNode::Set(_) => todo!(),
+            ExpressionNode::Type(_) => todo!(),
+            ExpressionNode::Number(node) => node.value.clone(),
+            ExpressionNode::Literal(node) => node.value.clone(),
+            ExpressionNode::Variable(node) => node.name.clone(),
+            ExpressionNode::Function(node) => node.name.clone(),
+            ExpressionNode::Operator(node) => node.operator.clone(),
+            ExpressionNode::Paren(node) => node.expression.token(),
+        }
+    }
 }
 
 impl Display for ExpressionNode {
@@ -244,6 +302,7 @@ impl Display for ExpressionNode {
             ExpressionNode::Set(set_node) => write!(f, "{}", set_node),
             ExpressionNode::Type(type_node) => write!(f, "{}", type_node),
             ExpressionNode::Number(number_node) => write!(f, "{}", number_node),
+            ExpressionNode::Literal(literal_node) => write!(f, "{}", literal_node),
             ExpressionNode::Variable(variable_node) => write!(f, "{}", variable_node),
             ExpressionNode::Function(function_node) => write!(f, "{}", function_node),
             ExpressionNode::Operator(operator_node) => write!(f, "{}", operator_node),
@@ -274,8 +333,18 @@ pub struct RelationNode {
 }
 
 impl RelationNode {
-    pub fn new(kind: RelationKind, token: Token, left: ExpressionNode, right: ExpressionNode) -> Self {
-        RelationNode { kind, token, left, right }
+    pub fn new(
+        kind: RelationKind,
+        token: Token,
+        left: ExpressionNode,
+        right: ExpressionNode,
+    ) -> Self {
+        RelationNode {
+            kind,
+            token,
+            left,
+            right,
+        }
     }
 }
 
@@ -328,24 +397,93 @@ impl Display for ImplicationNode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DefineNode {
+pub struct DefineFunctionNode {
     pub symbol: Token,
     pub type_node: TypeNode,
 }
 
+impl DefineFunctionNode {
+    pub fn new(symbol: Token, type_node: TypeNode) -> Self {
+        DefineFunctionNode { symbol, type_node }
+    }
+}
+
+impl Display for DefineFunctionNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} : {}",
+            self.symbol.value.clone().unwrap(),
+            self.type_node
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefineOperatorNode {
+    pub symbol: Token,
+    pub type_node: TypeNode,
+}
+
+impl DefineOperatorNode {
+    pub fn new(symbol: Token, type_node: TypeNode) -> Self {
+        DefineOperatorNode { symbol, type_node }
+    }
+}
+
+impl Display for DefineOperatorNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} : {}",
+            self.symbol.value.clone().unwrap(),
+            self.type_node
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefineSetNode {
+    pub symbol: Token,
+    pub set: SetNode,
+}
+
+impl DefineSetNode {
+    pub fn new(symbol: Token, set: SetNode) -> Self {
+        DefineSetNode { symbol, set }
+    }
+}
+
+impl Display for DefineSetNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} = {}", self.symbol.value.clone().unwrap(), self.set)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DefineNode {
+    Function(DefineFunctionNode),
+    Operator(DefineOperatorNode),
+    Set(DefineSetNode),
+}
+
 impl DefineNode {
-    pub fn new(symbol: Token, type_node: TypeNode) -> Self
-    {
-        DefineNode {
-            symbol,
-            type_node,
+    pub fn symbol(&self) -> String {
+        match self {
+            DefineNode::Function(node) => node.symbol.value.clone().unwrap(),
+            DefineNode::Operator(node) => node.symbol.value.clone().unwrap(),
+            DefineNode::Set(node) => node.symbol.value.clone().unwrap(),
         }
     }
 }
 
 impl Display for DefineNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} : {}", self.symbol.value.clone().unwrap(), self.type_node)
+        match &self {
+            DefineNode::Function(node) => write!(f, "{}", node),
+            DefineNode::Operator(node) => write!(f, "{}", node),
+            DefineNode::Set(node) => write!(f, "{}", node),
+        }
     }
 }
 
@@ -485,14 +623,8 @@ impl Parser {
         Ok(QuantifierNode::new(kind, symbol, type_node))
     }
 
-    fn parse_expression(&mut self) -> Result<ExpressionNode, ParserError> {
-        let expr = match &self.token.kind {
-            TokenKind::Type => {
-                let type_node = self.parse_type()?;
-                self.read(); // consume the type token
-
-                ExpressionNode::Type(type_node)
-            }
+    fn parse_set(&mut self) -> Result<SetNode, ParserError> {
+        match &self.token.kind {
             TokenKind::LBrace => {
                 self.read(); // consume the left brace token
 
@@ -520,13 +652,31 @@ impl Parser {
                     }
                 }
 
-                ExpressionNode::Set(SetNode::new(elements))
+                Ok(SetNode::new(elements))
             }
+            otherwise => Err(ParserError::Todo(format!(
+                "{}, Expected set, found {:?}",
+                self.sourcemap.format_pos(&self.token),
+                otherwise
+            ))),
+        }
+    }
+
+    fn parse_expression(&mut self) -> Result<ExpressionNode, ParserError> {
+        let expr = match &self.token.kind {
+            TokenKind::Type => self.parse_type().map(ExpressionNode::Type)?,
+            TokenKind::LBrace => self.parse_set().map(ExpressionNode::Set)?,
             TokenKind::Number => {
                 let value = self.token.clone();
                 self.read(); // consume the number token
 
                 ExpressionNode::Number(NumberNode::new(value))
+            }
+            TokenKind::Literal => {
+                let value = self.token.clone();
+                self.read(); // consume the literal token
+
+                ExpressionNode::Literal(LiteralNode::new(value))
             }
             TokenKind::Identifier => {
                 let name = self.token.clone();
@@ -679,31 +829,68 @@ impl Parser {
     }
 
     fn parse_define(&mut self) -> Result<DefineNode, ParserError> {
-        let symbol = match &self.token.kind {
-            TokenKind::Identifier => self.token.clone(),
-            TokenKind::Operator => self.token.clone(),
-            otherwise => {
-                return Err(ParserError::Todo(format!(
-                    "{}, Expected identifier or operator, found {:?}",
-                    self.sourcemap.format_pos(&self.token),
-                    otherwise
-                )));
+        match &self.token.kind {
+            TokenKind::Identifier => {
+                let symbol = self.token.clone();
+                self.read(); // consume the identifier token
+
+                if self.token.kind != TokenKind::Colon {
+                    return Err(ParserError::Todo(format!(
+                        "{}, Expected ':' after identifier, found {:?}",
+                        self.sourcemap.format_pos(&self.token),
+                        self.token.kind
+                    )));
+                }
+                self.read(); // consume the colon token
+
+                let type_node = self.parse_type()?;
+
+                Ok(DefineNode::Function(DefineFunctionNode::new(
+                    symbol, type_node,
+                )))
             }
-        };
-        self.read(); // consume the identifier token
+            TokenKind::Operator => {
+                let symbol = self.token.clone();
+                self.read(); // consume the identifier token
 
-        if self.token.kind != TokenKind::Colon {
-            return Err(ParserError::Todo(format!(
-                "{}, Expected ':' after variable, found {:?}",
+                if self.token.kind != TokenKind::Colon {
+                    return Err(ParserError::Todo(format!(
+                        "{}, Expected ':' after operator, found {:?}",
+                        self.sourcemap.format_pos(&self.token),
+                        self.token.kind
+                    )));
+                }
+                self.read(); // consume the colon token
+
+                let type_node = self.parse_type()?;
+
+                Ok(DefineNode::Operator(DefineOperatorNode::new(
+                    symbol, type_node,
+                )))
+            }
+            TokenKind::Type => {
+                let symbol = self.token.clone();
+                self.read(); // consume the identifier token
+
+                if self.token.kind != TokenKind::Equal {
+                    return Err(ParserError::Todo(format!(
+                        "{}, Expected '=' after type, found {:?}",
+                        self.sourcemap.format_pos(&self.token),
+                        self.token.kind
+                    )));
+                }
+                self.read(); // consume the equal token
+
+                let set = self.parse_set()?;
+
+                Ok(DefineNode::Set(DefineSetNode::new(symbol, set)))
+            }
+            otherwise => Err(ParserError::Todo(format!(
+                "{}, Expected type, identifier or operator, found {:?}",
                 self.sourcemap.format_pos(&self.token),
-                self.token.kind
-            )));
+                otherwise
+            ))),
         }
-        self.read(); // consume the colon token
-
-        let type_node = self.parse_type()?;
-
-        Ok(DefineNode::new(symbol, type_node))
     }
 
     pub fn parse(&mut self) -> Result<ProgramNode, ParserError> {
