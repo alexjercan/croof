@@ -106,7 +106,7 @@ pub struct Lexer {
 }
 
 fn issymbol(c: char) -> bool {
-    "+-*/=<>^&".contains(c)
+    "+-*/=<>^&|".contains(c)
 }
 
 impl Lexer {
