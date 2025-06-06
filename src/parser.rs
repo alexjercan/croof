@@ -7,6 +7,14 @@ pub enum ParserError {
     Todo(String),
 }
 
+impl Display for ParserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParserError::Todo(msg) => write!(f, "TODO: {}", msg),
+        }
+    }
+}
+
 pub struct Parser {
     lexer: Lexer,
     sourcemap: SourceMap,
@@ -314,12 +322,14 @@ impl Display for ExpressionNode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RelationKind {
     Equality,
+    GreaterThan,
 }
 
 impl Display for RelationKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RelationKind::Equality => write!(f, "="),
+            RelationKind::GreaterThan => write!(f, ">"),
         }
     }
 }
@@ -468,11 +478,11 @@ pub enum DefineNode {
 }
 
 impl DefineNode {
-    pub fn symbol(&self) -> String {
+    pub fn symbol(&self) -> Token {
         match self {
-            DefineNode::Function(node) => node.symbol.value.clone().unwrap(),
-            DefineNode::Operator(node) => node.symbol.value.clone().unwrap(),
-            DefineNode::Set(node) => node.symbol.value.clone().unwrap(),
+            DefineNode::Function(node) => node.symbol.clone(),
+            DefineNode::Operator(node) => node.symbol.clone(),
+            DefineNode::Set(node) => node.symbol.clone(),
         }
     }
 }
@@ -567,14 +577,14 @@ impl Parser {
                 )));
             }
             let type_node = self.token.clone();
-            self.read(); // consume the type token
+            self.read();
 
             types.push(type_node);
 
             if self.token.kind == TokenKind::Arrow {
-                self.read(); // consume the arrow token
+                self.read();
             } else {
-                break; // no more types, exit the loop
+                break;
             }
         }
 
@@ -594,7 +604,7 @@ impl Parser {
                 )));
             }
         };
-        self.read(); // consume the quantifier token
+        self.read();
 
         let symbol = match &self.token.kind {
             TokenKind::Identifier => self.token.clone(),
@@ -607,7 +617,7 @@ impl Parser {
                 )));
             }
         };
-        self.read(); // consume the variable token
+        self.read();
 
         if self.token.kind != TokenKind::Colon {
             return Err(ParserError::Todo(format!(
@@ -616,7 +626,7 @@ impl Parser {
                 self.token.kind
             )));
         }
-        self.read(); // consume the colon token
+        self.read();
 
         let type_node = self.parse_type()?;
 
@@ -626,23 +636,23 @@ impl Parser {
     fn parse_set(&mut self) -> Result<SetNode, ParserError> {
         match &self.token.kind {
             TokenKind::LBrace => {
-                self.read(); // consume the left brace token
+                self.read();
 
                 let mut elements = Vec::new();
                 loop {
                     if self.token.kind == TokenKind::RBrace {
-                        self.read(); // consume the right brace token
-                        break; // end of set elements
+                        self.read();
+                        break;
                     }
 
                     let element = self.parse_expression()?;
                     elements.push(element);
 
                     if self.token.kind == TokenKind::Comma {
-                        self.read(); // consume the comma token
+                        self.read();
                     } else if self.token.kind == TokenKind::RBrace {
-                        self.read(); // consume the right brace token
-                        break; // end of set elements
+                        self.read();
+                        break;
                     } else {
                         return Err(ParserError::Todo(format!(
                             "{}, Expected ',' or '}}', found {:?}",
@@ -668,23 +678,23 @@ impl Parser {
             TokenKind::LBrace => self.parse_set().map(ExpressionNode::Set)?,
             TokenKind::Number => {
                 let value = self.token.clone();
-                self.read(); // consume the number token
+                self.read();
 
                 ExpressionNode::Number(NumberNode::new(value))
             }
             TokenKind::Literal => {
                 let value = self.token.clone();
-                self.read(); // consume the literal token
+                self.read();
 
                 ExpressionNode::Literal(LiteralNode::new(value))
             }
             TokenKind::Identifier => {
                 let name = self.token.clone();
-                self.read(); // consume the identifier token
+                self.read();
 
                 match self.token.kind {
                     TokenKind::LParen => {
-                        self.read(); // consume the left parenthesis token
+                        self.read();
 
                         let mut arguments = Vec::new();
                         loop {
@@ -692,10 +702,10 @@ impl Parser {
                             arguments.push(argument);
 
                             if self.token.kind == TokenKind::RParen {
-                                self.read(); // consume the right parenthesis token
-                                break; // end of function arguments
+                                self.read();
+                                break;
                             } else if self.token.kind == TokenKind::Comma {
-                                self.read(); // consume the comma token
+                                self.read();
                             } else {
                                 return Err(ParserError::Todo(format!(
                                     "{}, Expected ',' or ')', found {:?}",
@@ -711,7 +721,7 @@ impl Parser {
                 }
             }
             TokenKind::LParen => {
-                self.read(); // consume the left parenthesis token
+                self.read();
                 let expr = self.parse_expression()?;
 
                 if self.token.kind != TokenKind::RParen {
@@ -721,7 +731,7 @@ impl Parser {
                         self.token.kind
                     )));
                 }
-                self.read(); // consume the right parenthesis token
+                self.read();
 
                 ExpressionNode::Paren(ParenNode::new(expr))
             }
@@ -737,7 +747,7 @@ impl Parser {
         let expr = match self.token.kind {
             TokenKind::Operator => {
                 let operator = self.token.clone();
-                self.read(); // consume the operator token
+                self.read();
 
                 let right_expr = self.parse_expression()?;
 
@@ -756,8 +766,12 @@ impl Parser {
         let token = self.token.clone();
         let kind = match token.kind {
             TokenKind::Equal => {
-                self.read(); // consume the equal token
+                self.read();
                 RelationKind::Equality
+            }
+            TokenKind::GreaterThan => {
+                self.read();
+                RelationKind::GreaterThan
             }
             otherwise => {
                 return Err(ParserError::Todo(format!(
@@ -792,14 +806,14 @@ impl Parser {
 
             match self.token.kind {
                 TokenKind::Then => {
-                    self.read(); // consume the arrow token
-                    break true; // if we have an arrow, we are in the conditions part
+                    self.read();
+                    break true;
                 }
                 TokenKind::Comma => {
-                    self.read(); // consume the comma token
+                    self.read();
                 }
                 _ => {
-                    break false; // if we don't have an arrow, we are in the conclusion part
+                    break false;
                 }
             }
         };
@@ -817,10 +831,10 @@ impl Parser {
 
             match self.token.kind {
                 TokenKind::Comma => {
-                    self.read(); // consume the comma token
+                    self.read();
                 }
                 _ => {
-                    break; // if we don't have an arrow, we are in the conclusion part
+                    break;
                 }
             }
         }
@@ -832,7 +846,7 @@ impl Parser {
         match &self.token.kind {
             TokenKind::Identifier => {
                 let symbol = self.token.clone();
-                self.read(); // consume the identifier token
+                self.read();
 
                 if self.token.kind != TokenKind::Colon {
                     return Err(ParserError::Todo(format!(
@@ -841,7 +855,7 @@ impl Parser {
                         self.token.kind
                     )));
                 }
-                self.read(); // consume the colon token
+                self.read();
 
                 let type_node = self.parse_type()?;
 
@@ -851,7 +865,7 @@ impl Parser {
             }
             TokenKind::Operator => {
                 let symbol = self.token.clone();
-                self.read(); // consume the identifier token
+                self.read();
 
                 if self.token.kind != TokenKind::Colon {
                     return Err(ParserError::Todo(format!(
@@ -860,7 +874,7 @@ impl Parser {
                         self.token.kind
                     )));
                 }
-                self.read(); // consume the colon token
+                self.read();
 
                 let type_node = self.parse_type()?;
 
@@ -870,7 +884,7 @@ impl Parser {
             }
             TokenKind::Type => {
                 let symbol = self.token.clone();
-                self.read(); // consume the identifier token
+                self.read();
 
                 if self.token.kind != TokenKind::Equal {
                     return Err(ParserError::Todo(format!(
@@ -879,7 +893,7 @@ impl Parser {
                         self.token.kind
                     )));
                 }
-                self.read(); // consume the equal token
+                self.read();
 
                 let set = self.parse_set()?;
 
@@ -902,13 +916,13 @@ impl Parser {
             match self.token.kind {
                 TokenKind::Eof => break,
                 TokenKind::Eval => {
-                    self.read(); // consume the eval token
+                    self.read();
                     let expr = self.parse_expression()?;
 
                     evaluations.push(expr);
                 }
                 TokenKind::Def => {
-                    self.read(); // consume the def token
+                    self.read();
                     let define = self.parse_define()?;
 
                     defines.push(define);

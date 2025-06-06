@@ -1,1 +1,2 @@
 tests/03-typecheck/01-literal.croof:1:1, Literal is not defined "one"
+Typechecking failed with 1 error

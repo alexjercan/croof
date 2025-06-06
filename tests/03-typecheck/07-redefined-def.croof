@@ -1,0 +1,2 @@
+def + : N -> N -> N
+def + : R -> R -> R

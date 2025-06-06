@@ -1,0 +1,2 @@
+tests/03-typecheck/09-redefined-type.croof:2:5, Type is already defined A
+Typechecking failed with 1 error

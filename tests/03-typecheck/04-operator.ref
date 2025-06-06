@@ -1,2 +1,3 @@
-tests/03-typecheck/04-operator.croof:5:3, Right Type A is different than Operator + Right Type N
-tests/03-typecheck/04-operator.croof:5:9, Left Type N is different than Right Type A
+tests/03-typecheck/04-operator.croof:5:3, Operator +: Expected Type N but found Type A
+tests/03-typecheck/04-operator.croof:5:9, Relation: Cannot compare Types N and A
+Typechecking failed with 2 errors

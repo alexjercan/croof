@@ -1,0 +1,2 @@
+tests/03-typecheck/06-greater.croof:4:19, Relation: Cannot compare Types N and A
+Typechecking failed with 1 error

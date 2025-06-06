@@ -1,0 +1,2 @@
+tests/03-typecheck/08-redefined-let.croof:1:22, Variable is already defined a
+Typechecking failed with 1 error

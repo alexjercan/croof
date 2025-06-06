@@ -1,5 +1,5 @@
 use clap::Parser as ArgParser;
-use std::{collections::HashMap, io};
+use std::{collections::HashMap, process::ExitCode};
 use typechecker::Typechecker;
 
 mod lexer;
@@ -29,13 +29,13 @@ struct Args {
     typecheck: bool,
 }
 
-fn main() -> io::Result<()> {
+fn main() -> ExitCode {
     let args = Args::parse();
     let mut sourcemap = SourceMap::default();
     let mut ast: ProgramNode = ProgramNode::default();
 
     for file in args.files {
-        let lexer = sourcemap.add_file(Some(file))?;
+        let lexer = sourcemap.add_file(Some(file)).expect("Failed to create lexer");
 
         if args.lexer {
             lexer.display_tokens(&sourcemap);
@@ -43,31 +43,39 @@ fn main() -> io::Result<()> {
         }
 
         let mut parser = Parser::new(lexer, &sourcemap);
-        let program = parser.parse().expect("Failed to parse program");
+        let program = parser.parse().expect("Failed to parse input");
 
         ast.merge(program);
     }
 
     if args.lexer {
-        return Ok(());
+        return ExitCode::SUCCESS;
     }
 
     if args.parser {
         println!("{}", ast);
-        return Ok(());
+        return ExitCode::SUCCESS;
     }
 
-    let typechecker = Typechecker::new(ast.defines.clone(), &sourcemap);
+    let (typechecker, mut errors) = Typechecker::new(ast.defines.clone(), &sourcemap);
+
     for implication in &mut ast.implications {
-        typechecker.check(implication);
+        errors.extend(typechecker.check(implication));
     }
 
     for eval in &mut ast.evaluations {
-        typechecker.check_expression(eval, &HashMap::default());
+        let (_, eval_errors) = typechecker.check_expression(eval, &HashMap::default());
+        errors.extend(eval_errors);
+    }
+
+    if !errors.is_empty() {
+        typechecker.display_errors(&errors);
+        eprintln!("Typechecking failed with {} {}", errors.len(), if errors.len() == 1 { "error" } else { "errors" });
+        return ExitCode::FAILURE;
     }
 
     if args.typecheck {
-        return Ok(());
+        return ExitCode::SUCCESS;
     }
 
     let solver = Solver::new(ast.implications.clone());
@@ -84,13 +92,10 @@ fn main() -> io::Result<()> {
         }
     }
 
-    Ok(())
+    ExitCode::SUCCESS
 }
 
-// TODO: add reference to lexer in each token such that we can display line and col and filename
-// TODO: check_expression should return Option<TypeNode> so we can ignore failures and just print
-// them
-// TODO: In the typechecker we should annotate the AST with types -> leaf nodes from Parser should
-// have a type reference
 // TODO: In the solver we can use AST types to check if we can substitute (e.g a + b -> 1 + 1
 // should also check if typeof(a) == typeof(1) besides just the operator being the same)
+// TODO: Maybe we want to return something like `Result<TypeNode, Vec<String>>` in the typechecker
+// and collect all errors instead of printing them immediately.

@@ -1,0 +1,5 @@
+def A = {"a"}
+
+forall a : N, exists b : N => a > b
+forall a : N => a > "a"
+"a" > "a"

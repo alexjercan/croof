@@ -18,6 +18,7 @@ pub enum TokenKind {
     Colon,
     Arrow,
     Equal,
+    GreaterThan,
     Then,
     Operator,
     Number,
@@ -147,6 +148,8 @@ impl Lexer {
             Token::new(TokenKind::Equal)
         } else if value == "=>" {
             Token::new(TokenKind::Then)
+        } else if value == ">" {
+            Token::new(TokenKind::GreaterThan)
         } else {
             Token::value(TokenKind::Operator, value)
         }

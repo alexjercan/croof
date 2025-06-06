@@ -1,1 +1,2 @@
-tests/03-typecheck/02-equal.croof:3:7, Left Type Numbers is different than Right Type N
+tests/03-typecheck/02-equal.croof:3:7, Relation: Cannot compare Types Numbers and N
+Typechecking failed with 1 error

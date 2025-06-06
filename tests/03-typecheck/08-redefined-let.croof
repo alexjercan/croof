@@ -1,0 +1,1 @@
+forall a : N, forall a : N => a = a

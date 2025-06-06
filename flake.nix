@@ -70,6 +70,10 @@
                     file_name=$(basename "$file_path")
                     echo -en "Testing $file_name ... "
 
+                    if [ ! -f "$ref_path" ]; then
+                        echo "TODO: Fill in the reference output" > "$ref_path"
+                    fi
+
                     diff_output=$(./"$MAIN" "$exec_arg" "$file_path" 2>&1 | diff - "$ref_path")
                     test_status=$?
                     if [ "$test_status" -eq 0 ]; then
