@@ -1,0 +1,27 @@
+# Mathematical Definitions for Natural Numbers
+
+forall a : N => (a) = a # Identity
+
+def + : N -> N -> N # Addition on Natural Numbers
+
+forall a : N               => 0 + a = a # Identity for Addition
+forall a : N, forall b : N => succ(a) + b = a + succ(b) # Successor Property for Addition
+
+forall a : N, forall b : N => a + b = b + a # Commutativity of Addition
+forall a : N, forall b : N, forall c : N => (a + b) + c = a + (b + c) # Associativity of Addition
+
+def * : N -> N -> N # Multiplication on Natural Numbers
+
+forall a : N               => 0 * a = 0 # Absolute Zero for Multiplication
+forall a : N               => 1 * a = a # Identity for Multiplication with 1
+forall a : N, forall b : N => succ(a) * b = (a * b) + b # Successor Property for Multiplication
+
+forall a : N, forall b : N => a * b = b * a # Commutativity of Multiplication
+forall a : N, forall b : N, forall c : N => (a * b) * c = a * (b * c) # Associativity of Multiplication
+forall a : N, forall b : N, forall c : N => a * (b + c) = (a * b) + (a * c) # Distributivity of Multiplication over Addition
+
+def ^ : N -> N -> N
+
+forall a : N => a ^ 0 = 1
+forall a : N => a ^ 1 = a
+forall a : N, forall b : N => a ^ succ(b) = (a ^ b) * a

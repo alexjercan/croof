@@ -80,13 +80,9 @@ fn main() -> ExitCode {
 
     let solver = Solver::new(ast.implications.clone());
     for expression in &ast.evaluations {
-        match solver.solve_bfs(expression) {
+        match solver.solve(expression) {
             Ok((steps, result)) => {
-                println!("Expression: {}", expression);
-                for (parent, implication) in steps {
-                    println!("  - {} (apply {})", parent, implication);
-                }
-                println!("Result: {}", result);
+                solver.display_solution(&expression, &steps, &result);
             }
             Err(e) => eprintln!("Error solving expression: {:?}", e),
         }

@@ -122,6 +122,13 @@ impl NumberNode {
             type_node: None,
         }
     }
+
+    pub fn typed(value: Token, type_node: TypeNode) -> Self {
+        NumberNode {
+            value,
+            type_node: Some(type_node),
+        }
+    }
 }
 
 impl Display for NumberNode {
@@ -186,6 +193,14 @@ impl FunctionNode {
             name,
             arguments,
             type_node: None,
+        }
+    }
+
+    pub fn typed(name: Token, arguments: Vec<ExpressionNode>, type_node: TypeNode) -> Self {
+        FunctionNode {
+            name,
+            arguments,
+            type_node: Some(type_node),
         }
     }
 }

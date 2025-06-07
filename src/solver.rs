@@ -3,10 +3,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use crate::{
     lexer::{Token, TokenKind},
     parser::{
-        ExpressionNode, FunctionNode, ImplicationNode, NumberNode, OperatorNode, ParenNode,
-        RelationKind, RelationNode, StatementNode,
+        ExpressionNode, FunctionNode, ImplicationNode, NumberNode, ParenNode, RelationKind,
+        RelationNode, StatementNode, TypeNode,
     },
-    typechecker::FUNCTION_SUCC,
+    typechecker::{FUNCTION_SUCC, TYPE_N},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,126 +99,36 @@ fn apply_mapping(
         ExpressionNode::Number(_) => Some(expression.clone()),
         ExpressionNode::Literal(_) => Some(expression.clone()),
         ExpressionNode::Variable(_) => mapping.get(expression).cloned(),
-        ExpressionNode::Function(function_node) => {
-            let args = function_node
+        ExpressionNode::Function(node) => {
+            let args = node
                 .arguments
                 .iter()
                 .map(|arg| apply_mapping(arg, mapping))
                 .collect::<Option<Vec<ExpressionNode>>>()?;
 
-            Some(ExpressionNode::Function(FunctionNode::new(
-                function_node.name.clone(),
-                args,
-            )))
-        }
-        ExpressionNode::Operator(operator_node) => {
-            let left = apply_mapping(&operator_node.left, mapping)?;
-            let right = apply_mapping(&operator_node.right, mapping)?;
+            let mut function_node = node.clone();
+            function_node.arguments = args;
 
-            Some(ExpressionNode::Operator(OperatorNode::new(
-                operator_node.operator.clone(),
-                left,
-                right,
-            )))
+            Some(ExpressionNode::Function(function_node))
         }
-        ExpressionNode::Paren(paren_node) => {
-            let expr = apply_mapping(&paren_node.expression, mapping)?;
-            Some(ExpressionNode::Paren(ParenNode::new(expr)))
+        ExpressionNode::Operator(node) => {
+            let left = apply_mapping(&node.left, mapping)?;
+            let right = apply_mapping(&node.right, mapping)?;
+
+            let mut operator_node = node.clone();
+            operator_node.left = Box::new(left);
+            operator_node.right = Box::new(right);
+
+            Some(ExpressionNode::Operator(operator_node))
         }
-    }
-}
+        ExpressionNode::Paren(node) => {
+            let expr = apply_mapping(&node.expression, mapping)?;
+            let mut paren_node = node.clone();
+            paren_node.expression = Box::new(expr);
 
-fn substitute_helper(
-    expression: &ExpressionNode,
-    implication: &ImplicationNode,
-    substitutions: &mut Vec<ExpressionNode>,
-) {
-    let StatementNode::Relation(relation) = &implication.conclusion[0] else {
-        todo!("Only single expression conclusions are supported for now");
-    };
-
-    match expression {
-        ExpressionNode::Set(_) => todo!(),
-        ExpressionNode::Type(_) => todo!(),
-        ExpressionNode::Number(_) => {
-            if let Some(mapping) = create_mapping(expression, &relation.left) {
-                if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
-                    substitutions.push(substituted);
-                }
-            }
-        }
-        ExpressionNode::Literal(_) => {
-            if let Some(mapping) = create_mapping(expression, &relation.left) {
-                if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
-                    substitutions.push(substituted);
-                }
-            }
-        }
-        ExpressionNode::Variable(_) => {
-            if let Some(mapping) = create_mapping(expression, &relation.left) {
-                if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
-                    substitutions.push(substituted);
-                }
-            }
-        }
-        ExpressionNode::Function(expr_node) => {
-            for (i, arg) in expr_node.arguments.iter().enumerate() {
-                let arg_substitutions = substitute(arg, implication);
-
-                for substituted in arg_substitutions {
-                    let mut new_expr = expr_node.clone();
-                    new_expr.arguments[i] = substituted;
-                    substitutions.push(ExpressionNode::Function(new_expr.clone()));
-                }
-            }
-
-            if let Some(mapping) = create_mapping(expression, &relation.left) {
-                if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
-                    substitutions.push(substituted);
-                }
-            }
-        }
-        ExpressionNode::Operator(expr_node) => {
-            let left_substitutions = substitute(&expr_node.left, implication);
-            for left_substituted in left_substitutions {
-                let mut new_expr = expr_node.clone();
-                *new_expr.left = left_substituted;
-                substitutions.push(ExpressionNode::Operator(new_expr.clone()));
-            }
-
-            let right_substitutions = substitute(&expr_node.right, implication);
-            for right_substituted in right_substitutions {
-                let mut new_expr = expr_node.clone();
-                *new_expr.right = right_substituted;
-                substitutions.push(ExpressionNode::Operator(new_expr.clone()));
-            }
-
-            if let Some(mapping) = create_mapping(expression, &relation.left) {
-                if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
-                    substitutions.push(substituted);
-                }
-            }
-        }
-        ExpressionNode::Paren(expr_node) => {
-            let expr_substitutions = substitute(&expr_node.expression, implication);
-            for substituted in expr_substitutions {
-                substitutions.push(ExpressionNode::Paren(ParenNode::new(substituted)));
-            }
-
-            if let Some(mapping) = create_mapping(expression, &relation.left) {
-                if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
-                    substitutions.push(substituted);
-                }
-            }
+            Some(ExpressionNode::Paren(paren_node))
         }
     }
-}
-
-fn substitute(expression: &ExpressionNode, implication: &ImplicationNode) -> Vec<ExpressionNode> {
-    let mut substitutions = Vec::new();
-    substitute_helper(expression, implication, &mut substitutions);
-
-    substitutions
 }
 
 fn substitute_builtin_helper(
@@ -235,13 +145,16 @@ fn substitute_builtin_helper(
                 return;
             }
 
-            let substitution = ExpressionNode::Function(FunctionNode::new(
+            let number = NumberNode::typed(
+                Token::value(TokenKind::Number, (value - 1).to_string()),
+                TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_N)]),
+            );
+            let function = FunctionNode::typed(
                 Token::value(TokenKind::Identifier, FUNCTION_SUCC),
-                vec![ExpressionNode::Number(NumberNode::new(Token::value(
-                    TokenKind::Number,
-                    (value - 1).to_string(),
-                )))],
-            ));
+                vec![ExpressionNode::Number(number.clone())],
+                TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_N)]),
+            );
+            let substitution = ExpressionNode::Function(function);
 
             let implication = ImplicationNode::new(
                 vec![],
@@ -268,10 +181,11 @@ fn substitute_builtin_helper(
                         .parse::<u64>()
                         .unwrap();
 
-                    let substitution = ExpressionNode::Number(NumberNode::new(Token::value(
-                        TokenKind::Number,
-                        (value + 1).to_string(),
-                    )));
+                    let number = NumberNode::typed(
+                        Token::value(TokenKind::Number, (value + 1).to_string()),
+                        TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_N)]),
+                    );
+                    let substitution = ExpressionNode::Number(number);
 
                     let implication = ImplicationNode::new(
                         vec![],
@@ -284,6 +198,15 @@ fn substitute_builtin_helper(
                     );
 
                     substitutions.push((substitution.clone(), implication));
+                }
+            }
+
+            let mut new_expr = expr_node.clone();
+            for (i, arg) in expr_node.arguments.iter().enumerate() {
+                let arg_substitutions = substitute_builtin(arg);
+                for (substituted, impl_node) in arg_substitutions {
+                    new_expr.arguments[i] = substituted;
+                    substitutions.push((ExpressionNode::Function(new_expr.clone()), impl_node));
                 }
             }
         }
@@ -302,7 +225,15 @@ fn substitute_builtin_helper(
                 substitutions.push((ExpressionNode::Operator(new_expr.clone()), right_impl));
             }
         }
-        ExpressionNode::Paren(_) => {}
+        ExpressionNode::Paren(node) => {
+            let expr_substitutions = substitute_builtin(&node.expression);
+            for (substituted, impl_node) in expr_substitutions {
+                substitutions.push((
+                    ExpressionNode::Paren(ParenNode::new(substituted)),
+                    impl_node,
+                ));
+            }
+        }
     }
 }
 
@@ -314,14 +245,15 @@ fn substitute_builtin(expression: &ExpressionNode) -> Vec<(ExpressionNode, Impli
 }
 
 fn trace_steps(
-    parent: &HashMap<ExpressionNode, (ExpressionNode, ImplicationNode)>,
+    parent: &HashMap<ExpressionNode, (ExpressionNode, ImplicationNode, Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>)>,
     expression: &ExpressionNode,
-) -> Vec<(ExpressionNode, ImplicationNode)> {
+) -> Vec<(ExpressionNode, ExpressionNode, ImplicationNode)> {
     let mut steps = Vec::new();
     let mut current = expression.clone();
 
-    while let Some((parent_expression, implication)) = parent.get(&current) {
-        steps.push((parent_expression.clone(), implication.clone()));
+    while let Some((parent_expression, implication, extra_steps)) = parent.get(&current) {
+        steps.push((parent_expression.clone(), current.clone(), implication.clone()));
+        steps.extend(extra_steps.clone());
         current = parent_expression.clone();
     }
 
@@ -334,10 +266,120 @@ impl Solver {
         Solver { implications }
     }
 
-    pub fn solve_bfs(
+    fn substitute_helper(
         &self,
         expression: &ExpressionNode,
-    ) -> Result<(Vec<(ExpressionNode, ImplicationNode)>, ExpressionNode), SolverError> {
+        implication: &ImplicationNode,
+        substitutions: &mut Vec<(ExpressionNode, Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>)>,
+    ) {
+        let StatementNode::Relation(relation) = &implication.conclusion[0] else {
+            todo!("Only single expression conclusions are supported for now");
+        };
+
+        match expression {
+            ExpressionNode::Set(_) => todo!(),
+            ExpressionNode::Type(_) => todo!(),
+            ExpressionNode::Number(_) => {
+                if let Some(mapping) = create_mapping(expression, &relation.left) {
+                    if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
+                        if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
+                            substitutions.push((substituted, steps));
+                        }
+                    }
+                }
+            }
+            ExpressionNode::Literal(_) => {
+                if let Some(mapping) = create_mapping(expression, &relation.left) {
+                    if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
+                        if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
+                            substitutions.push((substituted, steps));
+                        }
+                    }
+                }
+            }
+            ExpressionNode::Variable(_) => {
+                if let Some(mapping) = create_mapping(expression, &relation.left) {
+                    if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
+                        if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
+                            substitutions.push((substituted, steps));
+                        }
+                    }
+                }
+            }
+            ExpressionNode::Function(node) => {
+                for (i, arg) in node.arguments.iter().enumerate() {
+                    let arg_substitutions = self.substitute(arg, implication);
+
+                    for (substituted, steps) in arg_substitutions {
+                        let mut new_expr = node.clone();
+                        new_expr.arguments[i] = substituted;
+                        substitutions.push((ExpressionNode::Function(new_expr.clone()), steps));
+                    }
+                }
+
+                if let Some(mapping) = create_mapping(expression, &relation.left) {
+                    if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
+                        if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
+                            substitutions.push((substituted, steps));
+                        }
+                    }
+                }
+            }
+            ExpressionNode::Operator(node) => {
+                let left_substitutions = self.substitute(&node.left, implication);
+                for (left_substituted, left_steps) in left_substitutions {
+                    let mut new_expr = node.clone();
+                    *new_expr.left = left_substituted;
+                    substitutions.push((ExpressionNode::Operator(new_expr.clone()), left_steps));
+                }
+
+                let right_substitutions = self.substitute(&node.right, implication);
+                for (right_substituted, right_steps) in right_substitutions {
+                    let mut new_expr = node.clone();
+                    *new_expr.right = right_substituted;
+                    substitutions.push((ExpressionNode::Operator(new_expr.clone()), right_steps));
+                }
+
+                if let Some(mapping) = create_mapping(expression, &relation.left) {
+                    if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
+                        if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
+                            substitutions.push((substituted, steps));
+                        }
+                    }
+                }
+            }
+            ExpressionNode::Paren(node) => {
+                let expr_substitutions = self.substitute(&node.expression, implication);
+                for (substituted, steps) in expr_substitutions {
+                    let mut new_expr = node.clone();
+                    new_expr.expression = Box::new(substituted);
+                    substitutions.push((ExpressionNode::Paren(new_expr), steps));
+                }
+
+                if let Some(mapping) = create_mapping(expression, &relation.left) {
+                    if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
+                        self.display_solution(&relation.left, &steps, &relation.right);
+                        if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
+                            substitutions.push((substituted, steps));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn substitute(&self, expression: &ExpressionNode, implication: &ImplicationNode) -> Vec<(ExpressionNode, Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>)> {
+        let mut substitutions = Vec::new();
+        self.substitute_helper(expression, implication, &mut substitutions);
+
+        substitutions
+    }
+
+    pub fn solve_helper(
+        &self,
+        expression: &ExpressionNode,
+        condition: impl Fn(&ExpressionNode) -> bool,
+    ) -> Result<(Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>, ExpressionNode), SolverError> {
         let mut visited = HashSet::new();
         let mut parent = HashMap::new();
         let mut queue = VecDeque::new();
@@ -345,7 +387,7 @@ impl Solver {
         queue.push_back(expression.clone());
 
         while let Some(expression) = queue.pop_front() {
-            if expression.degree() == 0 {
+            if condition(&expression) {
                 let steps = trace_steps(&parent, &expression);
 
                 return Ok((steps, expression.clone()));
@@ -355,18 +397,18 @@ impl Solver {
 
             for (substitution, implication) in substitute_builtin(&expression) {
                 if !visited.contains(&substitution) {
-                    parent.insert(substitution.clone(), (expression.clone(), implication));
+                    parent.insert(substitution.clone(), (expression.clone(), implication, vec![]));
 
                     queue.push_back(substitution);
                 }
             }
 
             for implication in &self.implications {
-                for substitution in substitute(&expression, implication) {
+                for (substitution, steps) in self.substitute(&expression, implication) {
                     if !visited.contains(&substitution) {
                         parent.insert(
                             substitution.clone(),
-                            (expression.clone(), implication.clone()),
+                            (expression.clone(), implication.clone(), steps.clone()),
                         );
                         queue.push_back(substitution);
                     }
@@ -378,6 +420,63 @@ impl Solver {
             "No solution was found for {}",
             expression
         )))
+    }
+
+    pub fn solve(
+        &self,
+        expression: &ExpressionNode,
+    ) -> Result<(Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>, ExpressionNode), SolverError> {
+        self.solve_helper(expression, |expr| expr.degree() == 0)
+    }
+
+    pub fn proof(
+        &self,
+        relation: &RelationNode,
+    ) -> Result<Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>, SolverError> {
+        self.solve_helper(
+            &relation.left,
+            |expr| { expr == &relation.right },
+        ).map(|(steps, _)| steps)
+    }
+
+    fn proof_all(
+        &self,
+        conditions: &[StatementNode],
+        mapping: &HashMap<ExpressionNode, ExpressionNode>,
+    ) -> Result<Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>, SolverError> {
+        let mut steps = Vec::new();
+
+        for condition in conditions {
+            if let StatementNode::Relation(relation) = condition {
+                let left = apply_mapping(&relation.left, mapping);
+                let right = apply_mapping(&relation.right, mapping);
+
+                match (left, right) {
+                    (Some(left), Some(right)) => {
+                        let mut relation = relation.clone();
+                        relation.left = left;
+                        relation.right = right;
+
+                        steps.extend(self.proof(&relation)?);
+                        steps.reverse();
+                    }
+                    _ => return Err(SolverError::Todo(format!(
+                        "Failed to apply mapping for relation: {}",
+                        relation
+                    ))),
+                }
+            }
+        }
+
+        Ok(steps)
+    }
+
+    pub fn display_solution(&self, expression: &ExpressionNode, steps: &[(ExpressionNode, ExpressionNode, ImplicationNode)], result: &ExpressionNode) {
+        println!("Expression: {}", expression);
+        for (parent, target, implication) in steps {
+            println!("  - {} => {} (apply {})", parent, target, implication);
+        }
+        println!("Result: {}", result);
     }
 }
 
@@ -855,9 +954,10 @@ mod test {
             TokenKind::Number,
             "42",
         )))];
+        let solver = Solver::new(vec![implication.clone()]);
 
         // Act
-        let substitutions = substitute(&expression, &implication);
+        let substitutions = solver.substitute(&expression, &implication);
 
         // Assert
         assert_eq!(substitutions, expected);
@@ -905,9 +1005,10 @@ mod test {
             ExpressionNode::Variable(VariableNode::new(Token::value(TokenKind::Identifier, "2"))),
             ExpressionNode::Variable(VariableNode::new(Token::value(TokenKind::Identifier, "1"))),
         ))];
+        let solver = Solver::new(vec![implication.clone()]);
 
         // Act
-        let substitutions = substitute(&expression, &implication);
+        let substitutions = solver.substitute(&expression, &implication);
 
         // Assert
         assert_eq!(substitutions, expected);
