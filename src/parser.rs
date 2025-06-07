@@ -302,6 +302,19 @@ impl ExpressionNode {
             ExpressionNode::Paren(node) => node.expression.token(),
         }
     }
+
+    pub fn type_node(&self) -> Option<TypeNode> {
+        match self {
+            ExpressionNode::Set(_) => todo!(),
+            ExpressionNode::Type(_) => todo!(),
+            ExpressionNode::Number(node) => node.type_node.clone(),
+            ExpressionNode::Literal(node) => node.type_node.clone(),
+            ExpressionNode::Variable(node) => node.type_node.clone(),
+            ExpressionNode::Function(node) => node.type_node.clone(),
+            ExpressionNode::Operator(node) => node.type_node.clone(),
+            ExpressionNode::Paren(node) => node.type_node.clone(),
+        }
+    }
 }
 
 impl Display for ExpressionNode {

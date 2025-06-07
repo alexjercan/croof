@@ -23,6 +23,10 @@ fn create_mapping_helper(
     to: &ExpressionNode,
     mapping: &mut HashMap<ExpressionNode, ExpressionNode>,
 ) -> bool {
+    if from.type_node() != to.type_node() {
+        return false;
+    }
+
     match to {
         ExpressionNode::Set(_) => todo!(),
         ExpressionNode::Type(_) => todo!(),
@@ -31,9 +35,7 @@ fn create_mapping_helper(
             _ => false,
         },
         ExpressionNode::Literal(to_node) => match from {
-            ExpressionNode::Literal(from_node) => {
-                to_node.value == from_node.value && to_node.type_node == from_node.type_node
-            }
+            ExpressionNode::Literal(from_node) => to_node.value == from_node.value,
             _ => false,
         },
         ExpressionNode::Variable(_) => {
