@@ -358,7 +358,6 @@ impl Solver {
 
                 if let Some(mapping) = create_mapping(expression, &relation.left) {
                     if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
-                        self.display_solution(&relation.left, &steps, &relation.right);
                         if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
                             substitutions.push((substituted, steps));
                         }
