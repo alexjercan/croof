@@ -25,3 +25,29 @@ def ^ : N -> N -> N
 forall a : N => a ^ 0 = 1
 forall a : N => a ^ 1 = a
 forall a : N, forall b : N => a ^ succ(b) = (a ^ b) * a
+
+# Boolean Definitions
+def Bool = {"true", "false"}
+
+forall a : Bool => (a) = a
+
+def && : Bool -> Bool -> Bool
+
+"true" && "true" = "true"
+"true" && "false" = "false"
+"false" && "true" = "false"
+"false" && "false" = "false"
+
+def || : Bool -> Bool -> Bool
+
+"true" || "true" = "true"
+"true" || "false" = "true"
+"false" || "true" = "true"
+"false" || "false" = "false"
+
+# Comparison Definitions
+def < : N -> N -> Bool
+
+forall a : N => a < succ(a) = "true"
+forall a : N, forall b : N, a < b = "true" => a < succ(b) = "true"
+

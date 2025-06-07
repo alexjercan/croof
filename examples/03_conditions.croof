@@ -1,8 +1,1 @@
-def Bool = {"true", "false"}
-
-def < : N -> N -> Bool
-
-forall a : N => a < succ(a) = "true"
-forall a : N, forall b : N, a < b = "true" => a < succ(b) = "true"
-
 eval 1 < 4
