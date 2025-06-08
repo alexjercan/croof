@@ -245,14 +245,25 @@ fn substitute_builtin(expression: &ExpressionNode) -> Vec<(ExpressionNode, Impli
 }
 
 fn trace_steps(
-    parent: &HashMap<ExpressionNode, (ExpressionNode, ImplicationNode, Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>)>,
+    parent: &HashMap<
+        ExpressionNode,
+        (
+            ExpressionNode,
+            ImplicationNode,
+            Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>,
+        ),
+    >,
     expression: &ExpressionNode,
 ) -> Vec<(ExpressionNode, ExpressionNode, ImplicationNode)> {
     let mut steps = Vec::new();
     let mut current = expression.clone();
 
     while let Some((parent_expression, implication, extra_steps)) = parent.get(&current) {
-        steps.push((parent_expression.clone(), current.clone(), implication.clone()));
+        steps.push((
+            parent_expression.clone(),
+            current.clone(),
+            implication.clone(),
+        ));
         steps.extend(extra_steps.clone());
         current = parent_expression.clone();
     }
@@ -270,7 +281,10 @@ impl Solver {
         &self,
         expression: &ExpressionNode,
         implication: &ImplicationNode,
-        substitutions: &mut Vec<(ExpressionNode, Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>)>,
+        substitutions: &mut Vec<(
+            ExpressionNode,
+            Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>,
+        )>,
     ) {
         let StatementNode::Relation(relation) = &implication.conclusion[0] else {
             todo!("Only single expression conclusions are supported for now");
@@ -367,7 +381,14 @@ impl Solver {
         }
     }
 
-    fn substitute(&self, expression: &ExpressionNode, implication: &ImplicationNode) -> Vec<(ExpressionNode, Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>)> {
+    fn substitute(
+        &self,
+        expression: &ExpressionNode,
+        implication: &ImplicationNode,
+    ) -> Vec<(
+        ExpressionNode,
+        Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>,
+    )> {
         let mut substitutions = Vec::new();
         self.substitute_helper(expression, implication, &mut substitutions);
 
@@ -378,7 +399,13 @@ impl Solver {
         &self,
         expression: &ExpressionNode,
         condition: impl Fn(&ExpressionNode) -> bool,
-    ) -> Result<(Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>, ExpressionNode), SolverError> {
+    ) -> Result<
+        (
+            Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>,
+            ExpressionNode,
+        ),
+        SolverError,
+    > {
         let mut visited = HashSet::new();
         let mut parent = HashMap::new();
         let mut queue = VecDeque::new();
@@ -396,7 +423,10 @@ impl Solver {
 
             for (substitution, implication) in substitute_builtin(&expression) {
                 if !visited.contains(&substitution) {
-                    parent.insert(substitution.clone(), (expression.clone(), implication, vec![]));
+                    parent.insert(
+                        substitution.clone(),
+                        (expression.clone(), implication, vec![]),
+                    );
 
                     queue.push_back(substitution);
                 }
@@ -424,7 +454,13 @@ impl Solver {
     pub fn solve(
         &self,
         expression: &ExpressionNode,
-    ) -> Result<(Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>, ExpressionNode), SolverError> {
+    ) -> Result<
+        (
+            Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>,
+            ExpressionNode,
+        ),
+        SolverError,
+    > {
         self.solve_helper(expression, |expr| expr.degree() == 0)
     }
 
@@ -432,10 +468,8 @@ impl Solver {
         &self,
         relation: &RelationNode,
     ) -> Result<Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>, SolverError> {
-        self.solve_helper(
-            &relation.left,
-            |expr| { expr == &relation.right },
-        ).map(|(steps, _)| steps)
+        self.solve_helper(&relation.left, |expr| expr == &relation.right)
+            .map(|(steps, _)| steps)
     }
 
     fn proof_all(
@@ -459,10 +493,12 @@ impl Solver {
                         steps.extend(self.proof(&relation)?);
                         steps.reverse();
                     }
-                    _ => return Err(SolverError::Todo(format!(
-                        "Failed to apply mapping for relation: {}",
-                        relation
-                    ))),
+                    _ => {
+                        return Err(SolverError::Todo(format!(
+                            "Failed to apply mapping for relation: {}",
+                            relation
+                        )))
+                    }
                 }
             }
         }
@@ -470,7 +506,12 @@ impl Solver {
         Ok(steps)
     }
 
-    pub fn display_solution(&self, expression: &ExpressionNode, steps: &[(ExpressionNode, ExpressionNode, ImplicationNode)], result: &ExpressionNode) {
+    pub fn display_solution(
+        &self,
+        expression: &ExpressionNode,
+        steps: &[(ExpressionNode, ExpressionNode, ImplicationNode)],
+        result: &ExpressionNode,
+    ) {
         println!("Expression: {}", expression);
         for (parent, target, implication) in steps {
             println!("  - {} => {} (apply {})", parent, target, implication);

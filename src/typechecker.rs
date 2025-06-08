@@ -368,7 +368,7 @@ impl Typechecker {
                         self.sourcemap.format_pos(token),
                         token.value.clone().unwrap()
                     );
-                },
+                }
                 TypecheckerError::UndefinedLiteral(token) => {
                     eprintln!(
                         "{}, Literal is not defined \"{}\"",

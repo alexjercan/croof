@@ -1,15 +1,12 @@
 use clap::Parser as ArgParser;
 use std::{collections::HashMap, process::ExitCode};
-use typechecker::Typechecker;
 
-mod lexer;
-mod parser;
-mod solver;
-mod typechecker;
-
-use lexer::SourceMap;
-use parser::{Parser, ProgramNode};
-use solver::Solver;
+use croof::{
+    lexer::SourceMap,
+    parser::{Parser, ProgramNode},
+    solver::Solver,
+    typechecker::Typechecker,
+};
 
 #[derive(ArgParser, Debug)]
 #[command(version, about, long_about = None)]
@@ -35,7 +32,9 @@ fn main() -> ExitCode {
     let mut ast: ProgramNode = ProgramNode::default();
 
     for file in args.files {
-        let lexer = sourcemap.add_file(Some(file)).expect("Failed to create lexer");
+        let lexer = sourcemap
+            .add_file(Some(file))
+            .expect("Failed to create lexer");
 
         if args.lexer {
             lexer.display_tokens(&sourcemap);
@@ -70,7 +69,11 @@ fn main() -> ExitCode {
 
     if !errors.is_empty() {
         typechecker.display_errors(&errors);
-        eprintln!("Typechecking failed with {} {}", errors.len(), if errors.len() == 1 { "error" } else { "errors" });
+        eprintln!(
+            "Typechecking failed with {} {}",
+            errors.len(),
+            if errors.len() == 1 { "error" } else { "errors" }
+        );
         return ExitCode::FAILURE;
     }
 
@@ -90,8 +93,3 @@ fn main() -> ExitCode {
 
     ExitCode::SUCCESS
 }
-
-// TODO: In the solver we can use AST types to check if we can substitute (e.g a + b -> 1 + 1
-// should also check if typeof(a) == typeof(1) besides just the operator being the same)
-// TODO: Maybe we want to return something like `Result<TypeNode, Vec<String>>` in the typechecker
-// and collect all errors instead of printing them immediately.
