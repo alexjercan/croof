@@ -39,7 +39,7 @@ identities to transform expressions.
 
 ---
 
-## 🔢 Types and Values
+## 🔢 <a name="types-and-values">Types and Values</a>
 
 Croof supports:
 
@@ -50,7 +50,7 @@ You can define your own types using `def`.
 
 ---
 
-## ✍️ Syntax
+## ✍️ <a name="syntax">Syntax</a>
 
 ### Definitions: `def`
 
@@ -113,7 +113,7 @@ Expression: 1 + 1
 Result: 2
 ```
 
-## 🔧 Built-in Types and Operators
+## 🔧 <a name="built-in-types-and-operators">Built-in Types and Operators</a>
 
 Croof includes several built-in types and operators:
 
@@ -123,7 +123,7 @@ Croof includes several built-in types and operators:
 - **Logical Operators**: `&&`, `||` (for boolean values)
 - **Comparison Operators**: `<` (for natural numbers)
 
-## ✍️ Writing Your Own Expressions
+## ✍️ <a name="writing-your-own-expressions">Writing Your Own Expressions</a>
 
 You can create custom expressions using the defined syntax. For example, to
 define a function that computes the successor of the successor of a natural
@@ -134,7 +134,10 @@ def succ2 : N -> N
 forall x : N => succ2(x) = succ(succ(x))
 ```
 
-## 📝 Best Practices & Rules
+## 📝 <a name="best-practices--rules">Best Practices & Rules</a>
+
+When writing definitions and axioms in Croof, consider the following best
+practices:
 
 - Use clear and descriptive names for definitions.
 - Keep definitions simple and focused on a single concept.
@@ -146,7 +149,7 @@ forall x : N => succ2(x) = succ(succ(x))
 - Use parentheses to clarify precedence in complex expressions.
 - Follow a consistent naming convention for types and functions.
 
-## 📖 Examples
+## 📖 <a name="examples">Examples</a>
 
 ### Example 1: Hello World
 
@@ -186,7 +189,7 @@ Expression: 1 + 1
 Result: 2
 ```
 
-## 📦 Future Extensions
+## 📦 <a name="future-extensions">Future Extensions</a>
 
 Future versions of Croof may include:
 - Support for more complex data types (e.g., lists, tuples)
