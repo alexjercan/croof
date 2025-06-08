@@ -25,7 +25,7 @@ syntax.
 
 ---
 
-## 📚 Language Overview
+## 📚 <a name="language-overview">Language Overview</a>
 
 Croof is designed to:
 
