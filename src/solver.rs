@@ -1,6 +1,6 @@
 use std::{
     cmp::Reverse,
-    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
+    collections::{BinaryHeap, HashMap, HashSet},
 };
 
 use crate::{
@@ -268,6 +268,7 @@ fn trace_steps(
     }
 
     steps.reverse();
+
     steps
 }
 
@@ -388,56 +389,6 @@ impl Solver {
         substitutions
     }
 
-    fn solve_helper(
-        &self,
-        expression: &ExpressionNode,
-        is_target: impl Fn(&ExpressionNode) -> bool,
-    ) -> Result<(Vec<ProofStep>, ExpressionNode), SolverError> {
-        let mut visited = HashSet::new();
-        let mut parent = HashMap::new();
-        let mut queue = VecDeque::new();
-
-        queue.push_back(expression.clone());
-
-        while let Some(expression) = queue.pop_front() {
-            if is_target(&expression) {
-                let steps = trace_steps(&parent, &expression);
-
-                return Ok((steps, expression.clone()));
-            }
-
-            visited.insert(expression.clone());
-
-            for (substitution, implication) in substitute_builtin(&expression) {
-                if !visited.contains(&substitution) {
-                    parent.insert(
-                        substitution.clone(),
-                        (expression.clone(), implication, vec![]),
-                    );
-
-                    queue.push_back(substitution);
-                }
-            }
-
-            for implication in &self.implications {
-                for (substitution, steps) in self.substitute(&expression, implication) {
-                    if !visited.contains(&substitution) {
-                        parent.insert(
-                            substitution.clone(),
-                            (expression.clone(), implication.clone(), steps.clone()),
-                        );
-                        queue.push_back(substitution);
-                    }
-                }
-            }
-        }
-
-        Err(SolverError::Todo(format!(
-            "No solution was found for {}",
-            expression
-        )))
-    }
-
     fn solve_astar(
         &self,
         expression: &ExpressionNode,
@@ -469,8 +420,8 @@ impl Solver {
 
             for (substitution, implication, steps) in self.substitutions(&expression) {
                 let d = expression.distance(&substitution);
-                let tentative_g_score: i32 = g_score.get(&expression).unwrap_or(&std::i32::MAX) + d;
-                if &tentative_g_score < g_score.get(&substitution).unwrap_or(&std::i32::MAX) {
+                let tentative_g_score: i32 = g_score.get(&expression).unwrap_or(&i32::MAX) + d;
+                if &tentative_g_score < g_score.get(&substitution).unwrap_or(&i32::MAX) {
                     parent.insert(
                         substitution.clone(),
                         (expression.clone(), implication.clone(), steps.clone()),
@@ -553,12 +504,12 @@ impl Solver {
     pub fn substitutions(&self, expression: &ExpressionNode) -> Vec<SolverStep> {
         let mut substitutions = Vec::new();
 
-        for (substitution, implication) in substitute_builtin(&expression) {
+        for (substitution, implication) in substitute_builtin(expression) {
             substitutions.push((substitution, implication, vec![]));
         }
 
         for implication in &self.implications {
-            for (substituted, steps) in self.substitute(&expression, implication) {
+            for (substituted, steps) in self.substitute(expression, implication) {
                 substitutions.push((substituted, implication.clone(), steps));
             }
         }

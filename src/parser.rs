@@ -352,8 +352,8 @@ impl Display for ExpressionNode {
 }
 
 impl PartialOrd for ExpressionNode {
-    fn partial_cmp(&self, _: &Self) -> Option<std::cmp::Ordering> {
-        Some(std::cmp::Ordering::Equal)
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
