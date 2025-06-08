@@ -1,4 +1,7 @@
-use std::{cmp::Reverse, collections::{BinaryHeap, HashMap, HashSet, VecDeque}};
+use std::{
+    cmp::Reverse,
+    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
+};
 
 use crate::{
     lexer::{Token, TokenKind},
@@ -501,10 +504,7 @@ impl Solver {
         )
     }
 
-    pub fn proof(
-        &self,
-        relation: &RelationNode,
-    ) -> Result<Vec<ProofStep>, SolverError> {
+    pub fn proof(&self, relation: &RelationNode) -> Result<Vec<ProofStep>, SolverError> {
         // self.solve_helper(&relation.left, |expr| expr == &relation.right)
         //     .map(|(steps, _)| steps)
 
@@ -513,7 +513,7 @@ impl Solver {
             |expr| expr == &relation.right,
             |expr| expr.degree() as i32,
         )
-            .map(|(steps, _)| steps)
+        .map(|(steps, _)| steps)
     }
 
     fn proof_all(
