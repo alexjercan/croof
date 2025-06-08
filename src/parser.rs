@@ -330,6 +330,10 @@ impl ExpressionNode {
             ExpressionNode::Paren(node) => node.type_node.clone(),
         }
     }
+
+    pub fn distance(&self, _: &Self) -> i32 {
+        1
+    }
 }
 
 impl Display for ExpressionNode {
@@ -344,6 +348,18 @@ impl Display for ExpressionNode {
             ExpressionNode::Operator(operator_node) => write!(f, "{}", operator_node),
             ExpressionNode::Paren(paren_node) => write!(f, "{}", paren_node),
         }
+    }
+}
+
+impl PartialOrd for ExpressionNode {
+    fn partial_cmp(&self, _: &Self) -> Option<std::cmp::Ordering> {
+        Some(std::cmp::Ordering::Equal)
+    }
+}
+
+impl Ord for ExpressionNode {
+    fn cmp(&self, _: &Self) -> std::cmp::Ordering {
+        std::cmp::Ordering::Equal
     }
 }
 

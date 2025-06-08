@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{cmp::Reverse, collections::{BinaryHeap, HashMap, HashSet, VecDeque}};
 
 use crate::{
     lexer::{Token, TokenKind},
@@ -388,7 +388,7 @@ impl Solver {
     fn solve_helper(
         &self,
         expression: &ExpressionNode,
-        condition: impl Fn(&ExpressionNode) -> bool,
+        is_target: impl Fn(&ExpressionNode) -> bool,
     ) -> Result<(Vec<ProofStep>, ExpressionNode), SolverError> {
         let mut visited = HashSet::new();
         let mut parent = HashMap::new();
@@ -397,7 +397,7 @@ impl Solver {
         queue.push_back(expression.clone());
 
         while let Some(expression) = queue.pop_front() {
-            if condition(&expression) {
+            if is_target(&expression) {
                 let steps = trace_steps(&parent, &expression);
 
                 return Ok((steps, expression.clone()));
@@ -435,18 +435,84 @@ impl Solver {
         )))
     }
 
+    fn solve_astar(
+        &self,
+        expression: &ExpressionNode,
+        is_target: impl Fn(&ExpressionNode) -> bool,
+        heuristic: impl Fn(&ExpressionNode) -> i32,
+    ) -> Result<(Vec<ProofStep>, ExpressionNode), SolverError> {
+        let mut parent = HashMap::new();
+        let mut queue = BinaryHeap::new();
+        let mut open_set: HashSet<ExpressionNode> = HashSet::new();
+
+        let mut g_score: HashMap<ExpressionNode, i32> = HashMap::new();
+        g_score.insert(expression.clone(), 0);
+
+        let mut f_score: HashMap<ExpressionNode, i32> = HashMap::new();
+        let h = heuristic(expression);
+        f_score.insert(expression.clone(), h);
+
+        queue.push(Reverse((expression.clone(), h)));
+        open_set.insert(expression.clone());
+
+        while let Some(Reverse((expression, _))) = queue.pop() {
+            open_set.remove(&expression);
+
+            if is_target(&expression) {
+                let steps = trace_steps(&parent, &expression);
+
+                return Ok((steps, expression.clone()));
+            }
+
+            for (substitution, implication, steps) in self.substitutions(&expression) {
+                let d = expression.distance(&substitution);
+                let tentative_g_score: i32 = g_score.get(&expression).unwrap_or(&std::i32::MAX) + d;
+                if &tentative_g_score < g_score.get(&substitution).unwrap_or(&std::i32::MAX) {
+                    parent.insert(
+                        substitution.clone(),
+                        (expression.clone(), implication.clone(), steps.clone()),
+                    );
+                    g_score.insert(substitution.clone(), tentative_g_score);
+                    let f = tentative_g_score + heuristic(&substitution);
+                    f_score.insert(substitution.clone(), f);
+                    if !open_set.contains(&substitution) {
+                        queue.push(Reverse((substitution.clone(), f)));
+                        open_set.insert(substitution.clone());
+                    }
+                }
+            }
+        }
+
+        Err(SolverError::Todo(format!(
+            "No solution was found for {}",
+            expression
+        )))
+    }
+
     pub fn solve(
         &self,
         expression: &ExpressionNode,
     ) -> Result<(Vec<ProofStep>, ExpressionNode), SolverError> {
-        self.solve_helper(expression, |expr| expr.degree() == 0)
+        // self.solve_helper(expression, |expr| expr.degree() == 0)
+        self.solve_astar(
+            expression,
+            |expr| expr.degree() == 0,
+            |expr| expr.degree() as i32,
+        )
     }
 
     pub fn proof(
         &self,
         relation: &RelationNode,
     ) -> Result<Vec<ProofStep>, SolverError> {
-        self.solve_helper(&relation.left, |expr| expr == &relation.right)
+        // self.solve_helper(&relation.left, |expr| expr == &relation.right)
+        //     .map(|(steps, _)| steps)
+
+        self.solve_astar(
+            &relation.left,
+            |expr| expr == &relation.right,
+            |expr| expr.degree() as i32,
+        )
             .map(|(steps, _)| steps)
     }
 

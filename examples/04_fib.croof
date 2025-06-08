@@ -1,0 +1,7 @@
+def fib : N -> N
+
+fib(0) = 1
+fib(1) = 1
+forall x : N => fib(succ(succ(x))) = fib(x) + fib(succ(x))
+
+eval fib(4)
