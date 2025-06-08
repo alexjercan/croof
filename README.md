@@ -9,18 +9,20 @@ syntax.
 
 ## 📘 Table of Contents
 
-1. [Language Overview](#language-overview)
-2. [Types and Values](#types-and-values)
-3. [Syntax](#syntax)
+1. [📚 Language Overview](#📚-language-overview)
+2. [🔢 Types and Values](#🔢-types-and-values)
+3. [✍️ Syntax](#✍️-syntax)
    - [Definitions (`def`)](#definitions-def)
    - [Universal Quantification (`forall`)](#universal-quantification-forall)
    - [Equations and Axioms](#equations-and-axioms)
    - [Evaluation (`eval`)](#evaluation-eval)
-4. [Built-in Types and Operators](#built-in-types-and-operators)
-5. [Writing Your Own Expressions](#writing-your-own-expressions)
-6. [Best Practices & Rules](#best-practices--rules)
-7. [Examples](#examples)
-8. [Future Extensions](#future-extensions)
+4. [🔧 Built-in Types and Operators](#🔧-built-in-types-and-operators)
+5. [✍️ Writing Your Own Expressions](#✍️-writing-your-own-expressions)
+6. [📝 Best Practices & Rules](#📝-best-practices--rules)
+7. [📖 Examples](#📖-examples)
+   - [Example 1: Hello World](#example-1-hello-world)
+   - [Example 2: Natural Number Addition](#example-2-natural-number-addition)
+8. [📦 Future Extensions](#📦-future-extensions)
 
 ---
 
