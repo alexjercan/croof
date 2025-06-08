@@ -85,7 +85,7 @@ fn main() -> ExitCode {
     for expression in &ast.evaluations {
         match solver.solve(expression) {
             Ok((steps, result)) => {
-                solver.display_solution(&expression, &steps, &result);
+                solver.display_solution(expression, &steps, &result);
             }
             Err(e) => eprintln!("Error solving expression: {:?}", e),
         }

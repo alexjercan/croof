@@ -9,6 +9,9 @@ use crate::{
     typechecker::{FUNCTION_SUCC, TYPE_N},
 };
 
+pub type ProofStep = (ExpressionNode, ExpressionNode, ImplicationNode);
+pub type SolverStep = (ExpressionNode, ImplicationNode, Vec<ProofStep>);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SolverError {
     Todo(String),
@@ -245,16 +248,9 @@ fn substitute_builtin(expression: &ExpressionNode) -> Vec<(ExpressionNode, Impli
 }
 
 fn trace_steps(
-    parent: &HashMap<
-        ExpressionNode,
-        (
-            ExpressionNode,
-            ImplicationNode,
-            Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>,
-        ),
-    >,
+    parent: &HashMap<ExpressionNode, SolverStep>,
     expression: &ExpressionNode,
-) -> Vec<(ExpressionNode, ExpressionNode, ImplicationNode)> {
+) -> Vec<ProofStep> {
     let mut steps = Vec::new();
     let mut current = expression.clone();
 
@@ -281,10 +277,7 @@ impl Solver {
         &self,
         expression: &ExpressionNode,
         implication: &ImplicationNode,
-        substitutions: &mut Vec<(
-            ExpressionNode,
-            Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>,
-        )>,
+        substitutions: &mut Vec<(ExpressionNode, Vec<ProofStep>)>,
     ) {
         let StatementNode::Relation(relation) = &implication.conclusion[0] else {
             todo!("Only single expression conclusions are supported for now");
@@ -385,10 +378,7 @@ impl Solver {
         &self,
         expression: &ExpressionNode,
         implication: &ImplicationNode,
-    ) -> Vec<(
-        ExpressionNode,
-        Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>,
-    )> {
+    ) -> Vec<(ExpressionNode, Vec<ProofStep>)> {
         let mut substitutions = Vec::new();
         self.substitute_helper(expression, implication, &mut substitutions);
 
@@ -399,13 +389,7 @@ impl Solver {
         &self,
         expression: &ExpressionNode,
         condition: impl Fn(&ExpressionNode) -> bool,
-    ) -> Result<
-        (
-            Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>,
-            ExpressionNode,
-        ),
-        SolverError,
-    > {
+    ) -> Result<(Vec<ProofStep>, ExpressionNode), SolverError> {
         let mut visited = HashSet::new();
         let mut parent = HashMap::new();
         let mut queue = VecDeque::new();
@@ -454,20 +438,14 @@ impl Solver {
     pub fn solve(
         &self,
         expression: &ExpressionNode,
-    ) -> Result<
-        (
-            Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>,
-            ExpressionNode,
-        ),
-        SolverError,
-    > {
+    ) -> Result<(Vec<ProofStep>, ExpressionNode), SolverError> {
         self.solve_helper(expression, |expr| expr.degree() == 0)
     }
 
     pub fn proof(
         &self,
         relation: &RelationNode,
-    ) -> Result<Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>, SolverError> {
+    ) -> Result<Vec<ProofStep>, SolverError> {
         self.solve_helper(&relation.left, |expr| expr == &relation.right)
             .map(|(steps, _)| steps)
     }
@@ -476,7 +454,7 @@ impl Solver {
         &self,
         conditions: &[StatementNode],
         mapping: &HashMap<ExpressionNode, ExpressionNode>,
-    ) -> Result<Vec<(ExpressionNode, ExpressionNode, ImplicationNode)>, SolverError> {
+    ) -> Result<Vec<ProofStep>, SolverError> {
         let mut steps = Vec::new();
 
         for condition in conditions {
@@ -509,7 +487,7 @@ impl Solver {
     pub fn display_solution(
         &self,
         expression: &ExpressionNode,
-        steps: &[(ExpressionNode, ExpressionNode, ImplicationNode)],
+        steps: &[ProofStep],
         result: &ExpressionNode,
     ) {
         println!("Expression: {}", expression);
@@ -990,10 +968,10 @@ mod test {
                 ))),
             ))],
         );
-        let expected = vec![ExpressionNode::Number(NumberNode::new(Token::value(
-            TokenKind::Number,
-            "42",
-        )))];
+        let expected = vec![(
+            ExpressionNode::Number(NumberNode::new(Token::value(TokenKind::Number, "42"))),
+            vec![],
+        )];
         let solver = Solver::new(vec![implication.clone()]);
 
         // Act
@@ -1040,11 +1018,20 @@ mod test {
                 )),
             ))],
         );
-        let expected = vec![ExpressionNode::Operator(OperatorNode::new(
-            Token::value(TokenKind::Operator, "+"),
-            ExpressionNode::Variable(VariableNode::new(Token::value(TokenKind::Identifier, "2"))),
-            ExpressionNode::Variable(VariableNode::new(Token::value(TokenKind::Identifier, "1"))),
-        ))];
+        let expected = vec![(
+            ExpressionNode::Operator(OperatorNode::new(
+                Token::value(TokenKind::Operator, "+"),
+                ExpressionNode::Variable(VariableNode::new(Token::value(
+                    TokenKind::Identifier,
+                    "2",
+                ))),
+                ExpressionNode::Variable(VariableNode::new(Token::value(
+                    TokenKind::Identifier,
+                    "1",
+                ))),
+            )),
+            vec![],
+        )];
         let solver = Solver::new(vec![implication.clone()]);
 
         // Act

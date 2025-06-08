@@ -243,7 +243,7 @@ impl Lexer {
         lexer
     }
 
-    pub fn next(&mut self) -> Token {
+    pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
         let position = self.pos;
@@ -253,7 +253,7 @@ impl Lexer {
                 while self.ch != '\n' && self.ch != EOF {
                     self.read();
                 }
-                return self.next(); // Skip comments
+                return self.next_token(); // Skip comments
             }
             '{' => {
                 self.read();
@@ -300,7 +300,7 @@ impl Lexer {
         let mut lexer = self.clone();
 
         loop {
-            let token = lexer.next();
+            let token = lexer.next_token();
             if token.kind == TokenKind::Eof {
                 break;
             }

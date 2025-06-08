@@ -587,7 +587,7 @@ impl Parser {
 
     fn read(&mut self) -> Token {
         self.token = self.next_token.clone();
-        self.next_token = self.lexer.next();
+        self.next_token = self.lexer.next_token();
 
         self.token.clone()
     }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{hash_map, HashMap};
 
 use crate::{
     lexer::{SourceMap, Token, TokenKind},
@@ -309,10 +309,10 @@ impl Typechecker {
             StatementNode::Quantifier(quantifier_node) => {
                 let symbol = quantifier_node.symbol.clone();
                 let name = symbol.value.clone().unwrap();
-                if symbols.contains_key(&name) {
-                    errors.push(TypecheckerError::RedefinedVariable(symbol.clone()));
+                if let hash_map::Entry::Vacant(e) = symbols.entry(name) {
+                    e.insert(quantifier_node.type_node.clone());
                 } else {
-                    symbols.insert(name, quantifier_node.type_node.clone());
+                    errors.push(TypecheckerError::RedefinedVariable(symbol.clone()));
                 }
             }
             StatementNode::Relation(relation_node) => {
