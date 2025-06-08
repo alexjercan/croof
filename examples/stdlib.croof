@@ -20,11 +20,11 @@ forall a : N, forall b : N => a * b = b * a # Commutativity of Multiplication
 forall a : N, forall b : N, forall c : N => (a * b) * c = a * (b * c) # Associativity of Multiplication
 forall a : N, forall b : N, forall c : N => a * (b + c) = (a * b) + (a * c) # Distributivity of Multiplication over Addition
 
-def ^ : N -> N -> N
+def ^ : N -> N -> N # Exponentiation on Natural Numbers
 
-forall a : N => a ^ 0 = 1
-forall a : N => a ^ 1 = a
-forall a : N, forall b : N => a ^ succ(b) = (a ^ b) * a
+forall a : N => a ^ 0 = 1 # Identity for Exponentiation
+forall a : N => a ^ 1 = a # Identity for Exponentiation with 1
+forall a : N, forall b : N => a ^ succ(b) = (a ^ b) * a # Successor Property for Exponentiation
 
 # Boolean Definitions
 def Bool = {"true", "false"}

@@ -385,7 +385,7 @@ impl Solver {
         substitutions
     }
 
-    pub fn solve_helper(
+    fn solve_helper(
         &self,
         expression: &ExpressionNode,
         condition: impl Fn(&ExpressionNode) -> bool,
@@ -482,6 +482,22 @@ impl Solver {
         }
 
         Ok(steps)
+    }
+
+    pub fn substitutions(&self, expression: &ExpressionNode) -> Vec<SolverStep> {
+        let mut substitutions = Vec::new();
+
+        for (substitution, implication) in substitute_builtin(&expression) {
+            substitutions.push((substitution, implication, vec![]));
+        }
+
+        for implication in &self.implications {
+            for (substituted, steps) in self.substitute(&expression, implication) {
+                substitutions.push((substituted, implication.clone(), steps));
+            }
+        }
+
+        substitutions
     }
 
     pub fn display_solution(
