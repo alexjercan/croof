@@ -20,18 +20,14 @@ pub enum TypecheckerError {
     UndefinedType(Token),
     UndefinedLiteral(Token),
     UndefinedVariable(Token),
-    UndefinedFunction(Token),
-    UndefinedOperator(Token),
-    ArgumentTypeMissmatch {
-        function: Token,
-        argument: ExpressionNode,
-        expected: TypeNode,
-        found: TypeNode,
+    UndefinedFunction {
+        token: Token,
+        arg_types: Vec<Option<Token>>,
     },
-    OperatorTypeMissmatch {
-        operator: Token,
-        expected: TypeNode,
-        found: TypeNode,
+    UndefinedOperator {
+        token: Token,
+        left_type: Option<Token>,
+        right_type: Option<Token>,
     },
     RelationTypeMissmatch {
         relation: Token,
@@ -265,36 +261,34 @@ impl Typechecker {
                     let (arg_type, arg_errors) = self.check_expression(arg, symbols);
                     errors.extend(arg_errors);
 
-                    let Some(arg_type) = arg_type else {
-                        continue;
-                    };
-
-                    // if arg_type.types.len() != 1 || arg_types[i].value != arg_type.types[0].value {
-                    //     errors.push(TypecheckerError::ArgumentTypeMissmatch {
-                    //         function: function_node.name.clone(),
-                    //         argument: arg.clone(),
-                    //         expected: TypeNode::new(vec![arg_types[i].clone()]),
-                    //         found: arg_type,
-                    //     });
-                    // }
-
-                    if let Some(arg_type) = arg_type.types.first() {
-                        arg_types.push(arg_type.clone());
-                    }
+                    arg_types.push(arg_type.map(|t| t.types.first().cloned()).flatten());
                 }
 
                 let name = function_node.name.value.clone().unwrap();
 
-                let Some(function_type) = symbols.get(&name).or(match self.defines.get(&(name, arg_types)) {
+                let arg_type_tokens: Vec<Token> = arg_types
+                    .iter()
+                    .filter_map(|t| t.clone())
+                    .collect();
+
+                if arg_type_tokens.len() != arg_types.len() {
+                    errors.push(TypecheckerError::UndefinedFunction {
+                        token: function_node.name.clone(),
+                        arg_types,
+                    });
+                    return (None, errors);
+                }
+
+                let Some(function_type) = symbols.get(&name).or(match self.defines.get(&(name, arg_type_tokens)) {
                     Some(DefineNode::Function(node)) => Some(&node.type_node),
                     _ => None,
                 }) else {
                     return (
                         None,
-                        // also say that it is undefined for the current args
-                        vec![TypecheckerError::UndefinedFunction(
-                            function_node.name.clone(),
-                        )],
+                        vec![TypecheckerError::UndefinedFunction {
+                            token: function_node.name.clone(),
+                            arg_types,
+                        }],
                     );
                 };
 
@@ -314,35 +308,46 @@ impl Typechecker {
                     self.check_expression(&mut operator_node.left, symbols);
                 errors.extend(left_errors);
 
-                if let Some(left_type) = left_type {
-                    if let Some(left_type) = left_type.types.first() {
-                        arg_types.push(left_type.clone());
-                    }
-                }
+                arg_types.push(left_type.clone().map(|t| t.types.first().cloned()).flatten());
 
                 let (right_type, right_errors) =
                     self.check_expression(&mut operator_node.right, symbols);
                 errors.extend(right_errors);
 
-                if let Some(right_type) = right_type {
-                    if let Some(right_type) = right_type.types.first() {
-                        arg_types.push(right_type.clone());
-                    }
-                }
+                arg_types.push(right_type.clone().map(|t| t.types.first().cloned()).flatten());
 
                 let name = operator_node.operator.value.clone().unwrap();
+
+                let arg_type_tokens: Vec<Token> = arg_types
+                    .iter()
+                    .filter_map(|t| t.clone())
+                    .collect();
+
+                if (arg_type_tokens.len() != arg_types.len())
+                    || (arg_type_tokens.len() != 2)
+                {
+                    errors.push(TypecheckerError::UndefinedOperator {
+                        token: operator_node.operator.clone(),
+                        left_type: arg_types[0].clone(),
+                        right_type: arg_types[1].clone(),
+                    });
+
+                    return (None, errors);
+                }
 
                 let Some(operator_type) =
                     symbols
                         .get(&name)
-                        .or(match self.defines.get(&(name, arg_types)) {
+                        .or(match self.defines.get(&(name, arg_type_tokens)) {
                             Some(DefineNode::Operator(node)) => Some(&node.type_node),
                             _ => None,
                         })
                 else {
-                    errors.push(TypecheckerError::UndefinedOperator(
-                        operator_node.operator.clone(),
-                    ));
+                    errors.push(TypecheckerError::UndefinedOperator {
+                        token: operator_node.operator.clone(),
+                        left_type: arg_types[0].clone(),
+                        right_type: arg_types[1].clone(),
+                    });
 
                     return (None, errors);
                 };
@@ -449,46 +454,25 @@ impl Typechecker {
                         token.value.clone().unwrap()
                     );
                 }
-                TypecheckerError::UndefinedFunction(token) => {
+                TypecheckerError::UndefinedFunction { token, arg_types } => {
                     eprintln!(
-                        "{}, Function is not defined {}",
+                        "{}, Function {} with arguments {} is not defined",
                         self.sourcemap.format_pos(token),
-                        token.value.clone().unwrap()
+                        token.value.clone().unwrap(),
+                        arg_types
+                            .iter()
+                            .map(|t| t.clone().map(|t| t.value.clone().unwrap()).unwrap_or("?".to_string()))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     );
                 }
-                TypecheckerError::UndefinedOperator(token) => {
+                TypecheckerError::UndefinedOperator { token, left_type, right_type } => {
                     eprintln!(
-                        "{}, Operator is not defined {}",
+                        "{}, Operator {} is not defined with left type {} and right type {}",
                         self.sourcemap.format_pos(token),
-                        token.value.clone().unwrap()
-                    );
-                }
-                TypecheckerError::ArgumentTypeMissmatch {
-                    function,
-                    argument,
-                    expected,
-                    found,
-                } => {
-                    eprintln!(
-                        "{}, Function {}: Expected Type {} but found Type {} for argument ({})",
-                        self.sourcemap.format_pos(&argument.token()),
-                        function.value.clone().unwrap(),
-                        expected,
-                        found,
-                        argument,
-                    );
-                }
-                TypecheckerError::OperatorTypeMissmatch {
-                    operator,
-                    expected,
-                    found,
-                } => {
-                    eprintln!(
-                        "{}, Operator {}: Expected Type {} but found Type {}",
-                        self.sourcemap.format_pos(operator),
-                        operator.value.clone().unwrap(),
-                        expected,
-                        found,
+                        token.value.clone().unwrap(),
+                        left_type.clone().map(|t| t.value.clone().unwrap()).unwrap_or("?".to_string()),
+                        right_type.clone().map(|t| t.value.clone().unwrap()).unwrap_or("?".to_string())
                     );
                 }
                 TypecheckerError::RelationTypeMissmatch {

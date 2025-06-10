@@ -1,5 +1,4 @@
-tests/03-typecheck/07-redefined-def.croof:2:5, Operator is already defined +
 tests/03-typecheck/07-redefined-def.croof:2:9, Type is not defined R
 tests/03-typecheck/07-redefined-def.croof:2:14, Type is not defined R
 tests/03-typecheck/07-redefined-def.croof:2:19, Type is not defined R
-Typechecking failed with 4 errors
+Typechecking failed with 3 errors

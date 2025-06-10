@@ -1,2 +1,2 @@
-tests/03-typecheck/03-function.croof:5:3, Function f: Expected Type A but found Type N for argument (1)
+tests/03-typecheck/03-function.croof:5:1, Function f with arguments N is not defined
 Typechecking failed with 1 error

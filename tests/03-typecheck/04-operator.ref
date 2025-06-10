@@ -1,3 +1,2 @@
-tests/03-typecheck/04-operator.croof:5:3, Operator +: Expected Type N but found Type A
-tests/03-typecheck/04-operator.croof:5:9, Relation: Cannot compare Types N and A
-Typechecking failed with 2 errors
+tests/03-typecheck/04-operator.croof:5:3, Operator + is not defined with left type N and right type A
+Typechecking failed with 1 error
