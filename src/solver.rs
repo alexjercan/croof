@@ -9,11 +9,26 @@ use crate::{
         ExpressionNode, FunctionNode, ImplicationNode, NumberNode, ParenNode, RelationKind,
         RelationNode, StatementNode, TypeNode,
     },
-    typechecker::{FUNCTION_SUCC, TYPE_N},
+    typechecker::{FUNCTION_N, FUNCTION_NEG, FUNCTION_SUCC, FUNCTION_Z, TYPE_N, TYPE_Z},
 };
 
 pub type ProofStep = (ExpressionNode, ExpressionNode, ImplicationNode);
 pub type SolverStep = (ExpressionNode, ImplicationNode, Vec<ProofStep>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ExpressionWeighted(ExpressionNode, i32);
+
+impl PartialOrd for ExpressionWeighted {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ExpressionWeighted {
+    fn cmp(&self, _: &Self) -> std::cmp::Ordering {
+        std::cmp::Ordering::Equal
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SolverError {
@@ -145,53 +160,35 @@ fn substitute_builtin_helper(
         ExpressionNode::Set(_) => todo!(),
         ExpressionNode::Type(_) => todo!(),
         ExpressionNode::Number(expr_node) => {
-            let value = expr_node.value.value.clone().unwrap();
-            let value = value.parse::<u64>().unwrap();
-            if value == 0 {
-                return;
-            }
-
-            let number = NumberNode::typed(
-                Token::value(TokenKind::Number, (value - 1).to_string()),
-                TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_N)]),
-            );
-            let function = FunctionNode::typed(
-                Token::value(TokenKind::Identifier, FUNCTION_SUCC),
-                vec![ExpressionNode::Number(number.clone())],
-                TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_N)]),
-            );
-            let substitution = ExpressionNode::Function(function);
-
-            let implication = ImplicationNode::new(
-                vec![],
-                vec![StatementNode::Relation(RelationNode::new(
-                    RelationKind::Equality,
-                    Token::new(TokenKind::Equal),
-                    expression.clone(),
-                    substitution.clone(),
-                ))],
-            );
-
-            substitutions.push((substitution.clone(), implication));
-        }
-        ExpressionNode::Literal(_) => {}
-        ExpressionNode::Variable(_) => {}
-        ExpressionNode::Function(expr_node) => {
-            if expr_node.name.value.clone().unwrap() == FUNCTION_SUCC {
-                if let ExpressionNode::Number(number_node) = expr_node.arguments.first().unwrap() {
-                    let value = number_node
-                        .value
-                        .value
-                        .clone()
-                        .unwrap()
-                        .parse::<u64>()
-                        .unwrap();
+            match expr_node
+                .type_node
+                .clone()
+                .unwrap()
+                .types
+                .first()
+                .unwrap()
+                .value
+                .clone()
+                .unwrap()
+                .as_ref()
+            {
+                TYPE_N => {
+                    let value = expr_node.value.value.clone().unwrap();
+                    let value = value.parse::<u64>().unwrap();
+                    if value == 0 {
+                        return;
+                    }
 
                     let number = NumberNode::typed(
-                        Token::value(TokenKind::Number, (value + 1).to_string()),
+                        Token::value(TokenKind::Number, (value - 1).to_string()),
                         TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_N)]),
                     );
-                    let substitution = ExpressionNode::Number(number);
+                    let function = FunctionNode::typed(
+                        Token::value(TokenKind::Identifier, FUNCTION_SUCC),
+                        vec![ExpressionNode::Number(number.clone())],
+                        TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_N)]),
+                    );
+                    let substitution = ExpressionNode::Function(function);
 
                     let implication = ImplicationNode::new(
                         vec![],
@@ -205,6 +202,139 @@ fn substitute_builtin_helper(
 
                     substitutions.push((substitution.clone(), implication));
                 }
+                TYPE_Z => {}
+                _ => todo!(),
+            }
+        }
+        ExpressionNode::Literal(_) => {}
+        ExpressionNode::Variable(_) => {}
+        ExpressionNode::Function(expr_node) => {
+            match expr_node.name.value.clone().unwrap().as_ref() {
+                FUNCTION_N => {
+                    if let ExpressionNode::Number(number_node) =
+                        expr_node.arguments.first().unwrap()
+                    {
+                        let value = number_node
+                            .value
+                            .value
+                            .clone()
+                            .unwrap()
+                            .parse::<u64>()
+                            .unwrap();
+
+                        let number = NumberNode::typed(
+                            Token::value(TokenKind::Number, value.to_string()),
+                            TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_N)]),
+                        );
+                        let substitution = ExpressionNode::Number(number);
+
+                        let implication = ImplicationNode::new(
+                            vec![],
+                            vec![StatementNode::Relation(RelationNode::new(
+                                RelationKind::Equality,
+                                Token::new(TokenKind::Equal),
+                                expression.clone(),
+                                substitution.clone(),
+                            ))],
+                        );
+
+                        substitutions.push((substitution.clone(), implication));
+                    }
+                }
+                FUNCTION_SUCC => {
+                    if let ExpressionNode::Number(number_node) =
+                        expr_node.arguments.first().unwrap()
+                    {
+                        let value = number_node
+                            .value
+                            .value
+                            .clone()
+                            .unwrap()
+                            .parse::<u64>()
+                            .unwrap();
+
+                        let number = NumberNode::typed(
+                            Token::value(TokenKind::Number, (value + 1).to_string()),
+                            TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_N)]),
+                        );
+                        let substitution = ExpressionNode::Number(number);
+
+                        let implication = ImplicationNode::new(
+                            vec![],
+                            vec![StatementNode::Relation(RelationNode::new(
+                                RelationKind::Equality,
+                                Token::new(TokenKind::Equal),
+                                expression.clone(),
+                                substitution.clone(),
+                            ))],
+                        );
+
+                        substitutions.push((substitution.clone(), implication));
+                    }
+                }
+                FUNCTION_Z => {
+                    if let ExpressionNode::Number(number_node) =
+                        expr_node.arguments.first().unwrap()
+                    {
+                        let value = number_node
+                            .value
+                            .value
+                            .clone()
+                            .unwrap()
+                            .parse::<u64>()
+                            .unwrap();
+
+                        let number = NumberNode::typed(
+                            Token::value(TokenKind::Number, value.to_string()),
+                            TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_Z)]),
+                        );
+                        let substitution = ExpressionNode::Number(number);
+
+                        let implication = ImplicationNode::new(
+                            vec![],
+                            vec![StatementNode::Relation(RelationNode::new(
+                                RelationKind::Equality,
+                                Token::new(TokenKind::Equal),
+                                expression.clone(),
+                                substitution.clone(),
+                            ))],
+                        );
+
+                        substitutions.push((substitution.clone(), implication));
+                    }
+                }
+                FUNCTION_NEG => {
+                    if let ExpressionNode::Number(number_node) =
+                        expr_node.arguments.first().unwrap()
+                    {
+                        let value = number_node
+                            .value
+                            .value
+                            .clone()
+                            .unwrap()
+                            .parse::<i64>()
+                            .unwrap();
+
+                        let number = NumberNode::typed(
+                            Token::value(TokenKind::Number, (-value).to_string()),
+                            TypeNode::new(vec![Token::value(TokenKind::Type, TYPE_Z)]),
+                        );
+                        let substitution = ExpressionNode::Number(number);
+
+                        let implication = ImplicationNode::new(
+                            vec![],
+                            vec![StatementNode::Relation(RelationNode::new(
+                                RelationKind::Equality,
+                                Token::new(TokenKind::Equal),
+                                expression.clone(),
+                                substitution.clone(),
+                            ))],
+                        );
+
+                        substitutions.push((substitution.clone(), implication));
+                    }
+                }
+                _ => {}
             }
 
             let mut new_expr = expr_node.clone();
@@ -396,7 +526,7 @@ impl Solver {
         heuristic: impl Fn(&ExpressionNode) -> i32,
     ) -> Result<(Vec<ProofStep>, ExpressionNode), SolverError> {
         let mut parent = HashMap::new();
-        let mut queue = BinaryHeap::new();
+        let mut queue: BinaryHeap<Reverse<ExpressionWeighted>> = BinaryHeap::new();
         let mut open_set: HashSet<ExpressionNode> = HashSet::new();
 
         let mut g_score: HashMap<ExpressionNode, i32> = HashMap::new();
@@ -406,10 +536,10 @@ impl Solver {
         let h = heuristic(expression);
         f_score.insert(expression.clone(), h);
 
-        queue.push(Reverse((expression.clone(), h)));
+        queue.push(Reverse(ExpressionWeighted(expression.clone(), h)));
         open_set.insert(expression.clone());
 
-        while let Some(Reverse((expression, _))) = queue.pop() {
+        while let Some(Reverse(ExpressionWeighted(expression, _))) = queue.pop() {
             open_set.remove(&expression);
 
             if is_target(&expression) {
@@ -430,7 +560,7 @@ impl Solver {
                     let f = tentative_g_score + heuristic(&substitution);
                     f_score.insert(substitution.clone(), f);
                     if !open_set.contains(&substitution) {
-                        queue.push(Reverse((substitution.clone(), f)));
+                        queue.push(Reverse(ExpressionWeighted(substitution.clone(), f)));
                         open_set.insert(substitution.clone());
                     }
                 }
@@ -447,7 +577,6 @@ impl Solver {
         &self,
         expression: &ExpressionNode,
     ) -> Result<(Vec<ProofStep>, ExpressionNode), SolverError> {
-        // self.solve_helper(expression, |expr| expr.degree() == 0)
         self.solve_astar(
             expression,
             |expr| expr.degree() == 0,
@@ -456,15 +585,28 @@ impl Solver {
     }
 
     pub fn proof(&self, relation: &RelationNode) -> Result<Vec<ProofStep>, SolverError> {
-        // self.solve_helper(&relation.left, |expr| expr == &relation.right)
-        //     .map(|(steps, _)| steps)
-
-        self.solve_astar(
-            &relation.left,
-            |expr| expr == &relation.right,
+        let (mut right_steps, right_expr) = self.solve_astar(
+            &relation.right,
+            |expr| expr.degree() == 0,
             |expr| expr.degree() as i32,
-        )
-        .map(|(steps, _)| steps)
+        )?;
+
+        match &relation.kind {
+            RelationKind::Equality => self.solve_astar(
+                &relation.left,
+                |expr| expr == &right_expr,
+                |expr| expr.degree() as i32,
+            ),
+            RelationKind::GreaterThan => self.solve_astar(
+                &relation.left,
+                |expr| expr > &right_expr,
+                |expr| expr.degree() as i32,
+            ),
+        }
+        .map(|(mut steps, _)| {
+            steps.append(&mut right_steps);
+            steps
+        })
     }
 
     fn proof_all(

@@ -1,0 +1,13 @@
+def abs : Z -> Z
+
+abs(z(0)) = z(0)
+forall a : Z, z(0) > a => abs(a) = neg(a)
+forall a : Z, a > z(0) => abs(a) = a
+
+def + : Z -> Z -> Z
+
+forall a : Z => z(0) + a = a
+
+eval abs(-1)
+eval z(0) + -1
+# eval n(abs(z(2))) + n(abs(-1))

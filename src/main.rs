@@ -93,3 +93,5 @@ fn main() -> ExitCode {
 
     ExitCode::SUCCESS
 }
+
+// TODO: instead of unwraps in solver maybe we want to return Result<..., RuntimeError>

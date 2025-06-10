@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::hash::{Hash, Hasher};
 
 use crate::lexer::{Lexer, SourceMap, Token, TokenKind};
 
@@ -353,13 +354,22 @@ impl Display for ExpressionNode {
 
 impl PartialOrd for ExpressionNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
+        match (self, other) {
+            (ExpressionNode::Number(node), ExpressionNode::Number(other)) => {
+                let type_node = node.type_node.clone()?.types.first()?.value.clone()?;
+                let type_other = other.type_node.clone()?.types.first()?.value.clone()?;
 
-impl Ord for ExpressionNode {
-    fn cmp(&self, _: &Self) -> std::cmp::Ordering {
-        std::cmp::Ordering::Equal
+                if type_node == type_other {
+                    let number_node = node.value.value.clone()?.parse::<i64>().unwrap();
+                    let other_node = other.value.value.clone()?.parse::<i64>().unwrap();
+
+                    return number_node.partial_cmp(&other_node);
+                }
+
+                None
+            },
+            _ => None,
+        }
     }
 }
 
@@ -450,7 +460,7 @@ impl Display for ImplicationNode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DefineFunctionNode {
     pub symbol: Token,
     pub type_node: TypeNode,
@@ -473,7 +483,7 @@ impl Display for DefineFunctionNode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DefineOperatorNode {
     pub symbol: Token,
     pub type_node: TypeNode,
@@ -506,6 +516,16 @@ impl DefineSetNode {
     pub fn new(symbol: Token, set: SetNode) -> Self {
         DefineSetNode { symbol, set }
     }
+
+    pub fn name(symbol: Token) -> Self {
+        DefineSetNode::new(symbol, SetNode::new(vec![]))
+    }
+}
+
+impl Hash for DefineSetNode {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.symbol.hash(state);
+    }
 }
 
 impl Display for DefineSetNode {
@@ -514,7 +534,7 @@ impl Display for DefineSetNode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DefineNode {
     Function(DefineFunctionNode),
     Operator(DefineOperatorNode),

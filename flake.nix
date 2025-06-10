@@ -106,7 +106,7 @@
             }
 
             main() {
-                cargo build --release || exit 1
+                ${pkgs.cargo}/bin/cargo build --release || exit 1
 
                 while [[ $# -gt 0 ]]; do
                     case "$1" in

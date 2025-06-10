@@ -110,7 +110,7 @@ fn issymbol(c: char) -> bool {
 }
 
 impl Lexer {
-    fn peek(&mut self) -> char {
+    fn peek(&self) -> char {
         // Peek the next character without advancing the read position
         self.input.chars().nth(self.read_pos).unwrap_or(EOF)
     }
@@ -156,11 +156,14 @@ impl Lexer {
     }
 
     fn tokenize_number(&mut self) -> Token {
-        if !self.ch.is_ascii_digit() {
+        if !(self.ch.is_ascii_digit() || (self.ch == '-' && self.peek().is_ascii_digit())) {
             return Token::value(TokenKind::Illegal, self.ch);
         }
 
         let mut value = String::new();
+        value.push(self.ch);
+        self.read();
+
         while self.ch.is_ascii_digit() {
             value.push(self.ch);
             self.read();
@@ -280,8 +283,8 @@ impl Lexer {
                 Token::new(TokenKind::Colon)
             }
             '"' => self.tokenize_string(),
+            _ if self.ch.is_ascii_digit() || (self.ch == '-' && self.peek().is_ascii_digit()) => self.tokenize_number(),
             _ if issymbol(self.ch) => self.tokenize_symbol(),
-            _ if self.ch.is_ascii_digit() => self.tokenize_number(),
             _ if self.ch.is_uppercase() => self.tokenize_type(),
             _ if self.ch.is_lowercase() => self.tokenize_identifier(),
             illegal => {

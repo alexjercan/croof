@@ -48,5 +48,4 @@ def || : Bool -> Bool -> Bool
 # Comparison Definitions
 def < : N -> N -> Bool
 
-forall a : N => a < succ(a) = "true"
-forall a : N, forall b : N, a < b = "true" => a < succ(b) = "true"
+forall a : N, forall b : N, b > a => a < b = "true"
