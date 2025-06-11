@@ -22,17 +22,17 @@ pub enum TypecheckerError {
     UndefinedVariable(Token),
     UndefinedFunction {
         token: Token,
-        arg_types: Vec<Option<Token>>,
+        arg_types: Vec<String>,
     },
     UndefinedOperator {
         token: Token,
-        left_type: Option<Token>,
-        right_type: Option<Token>,
+        left_type: Option<Vec<String>>,
+        right_type: Option<Vec<String>>,
     },
     RelationTypeMissmatch {
         relation: Token,
-        expected: TypeNode,
-        found: TypeNode,
+        expected: Vec<String>,
+        found: Vec<String>,
     },
     RedefinedType(Token),
     RedefinedVariable(Token),
@@ -42,77 +42,107 @@ pub enum TypecheckerError {
 
 pub struct Typechecker {
     sourcemap: SourceMap,
-    defines: HashMap<(String, Vec<Token>), DefineNode>,
+    defines: HashMap<String, HashMap<Vec<String>, DefineNode>>,
 }
 
 impl Typechecker {
     pub fn new(defines: Vec<DefineNode>, sourcemap: &SourceMap) -> (Self, Vec<TypecheckerError>) {
-        let mut mapping: HashMap<(String, Vec<Token>), DefineNode> = HashMap::new();
+        let mut mapping: HashMap<String, HashMap<Vec<String>, DefineNode>> = HashMap::new();
 
         // def N = { }
         mapping.insert(
-            (TYPE_N.to_string(), vec![]),
-            DefineNode::Set(DefineSetNode::new(
-                Token::value(TokenKind::Type, TYPE_N),
-                SetNode::new(vec![]),
-            )),
+            TYPE_N.to_string(),
+            HashMap::from([
+                (
+                    vec![],
+                    DefineNode::Set(DefineSetNode::new(
+                        Token::with_value(TokenKind::Type, TYPE_N),
+                        SetNode::new(vec![]),
+                    )),
+                ),
+            ]),
         );
 
         // def n : Z -> N
         mapping.insert(
-            (FUNCTION_N.to_string(), vec![Token::value(TokenKind::Type, TYPE_Z)]),
-            DefineNode::Function(DefineFunctionNode::new(
-                Token::value(TokenKind::Identifier, FUNCTION_N),
-                TypeNode::new(vec![
-                    Token::value(TokenKind::Type, TYPE_Z),
-                    Token::value(TokenKind::Type, TYPE_N),
-                ]),
-            )),
+            FUNCTION_N.to_string(),
+            HashMap::from([
+                (
+                    vec![TYPE_Z.to_string()],
+                    DefineNode::Function(DefineFunctionNode::new(
+                        Token::with_value(TokenKind::Identifier, FUNCTION_N),
+                        TypeNode::new(vec![
+                            Token::with_value(TokenKind::Type, TYPE_Z),
+                            Token::with_value(TokenKind::Type, TYPE_N),
+                        ]),
+                    )),
+                ),
+            ]),
         );
 
         // def succ : N -> N
         mapping.insert(
-            (FUNCTION_SUCC.to_string(), vec![Token::value(TokenKind::Type, TYPE_N)]),
-            DefineNode::Function(DefineFunctionNode::new(
-                Token::value(TokenKind::Identifier, FUNCTION_SUCC),
-                TypeNode::new(vec![
-                    Token::value(TokenKind::Type, TYPE_N),
-                    Token::value(TokenKind::Type, TYPE_N),
-                ]),
-            )),
+            FUNCTION_SUCC.to_string(),
+            HashMap::from([
+                (
+                    vec![TYPE_N.to_string()],
+                    DefineNode::Function(DefineFunctionNode::new(
+                        Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
+                        TypeNode::new(vec![
+                            Token::with_value(TokenKind::Type, TYPE_N),
+                            Token::with_value(TokenKind::Type, TYPE_N),
+                        ]),
+                    )),
+                ),
+            ]),
         );
 
         // def Z = { }
         mapping.insert(
-            (TYPE_Z.to_string(), vec![]),
-            DefineNode::Set(DefineSetNode::new(
-                Token::value(TokenKind::Type, TYPE_Z),
-                SetNode::new(vec![]),
-            )),
+            TYPE_Z.to_string(),
+            HashMap::from([
+                (
+                    vec![],
+                    DefineNode::Set(DefineSetNode::new(
+                        Token::with_value(TokenKind::Type, TYPE_Z),
+                        SetNode::new(vec![]),
+                    )),
+                ),
+            ]),
         );
 
         // def z : N -> Z
         mapping.insert(
-            (FUNCTION_Z.to_string(), vec![Token::value(TokenKind::Type, TYPE_N)]),
-            DefineNode::Function(DefineFunctionNode::new(
-                Token::value(TokenKind::Identifier, FUNCTION_Z),
-                TypeNode::new(vec![
-                    Token::value(TokenKind::Type, TYPE_N),
-                    Token::value(TokenKind::Type, TYPE_Z),
-                ]),
-            )),
+            FUNCTION_Z.to_string(),
+            HashMap::from([
+                (
+                    vec![TYPE_N.to_string()],
+                    DefineNode::Function(DefineFunctionNode::new(
+                        Token::with_value(TokenKind::Identifier, FUNCTION_Z),
+                        TypeNode::new(vec![
+                            Token::with_value(TokenKind::Type, TYPE_N),
+                            Token::with_value(TokenKind::Type, TYPE_Z),
+                        ]),
+                    )),
+                ),
+            ]),
         );
 
         // def neg : Z -> Z
         mapping.insert(
-            (FUNCTION_NEG.to_string(), vec![Token::value(TokenKind::Type, TYPE_Z)]),
-            DefineNode::Function(DefineFunctionNode::new(
-                Token::value(TokenKind::Identifier, FUNCTION_NEG),
-                TypeNode::new(vec![
-                    Token::value(TokenKind::Type, TYPE_Z),
-                    Token::value(TokenKind::Type, TYPE_Z),
-                ]),
-            )),
+            FUNCTION_NEG.to_string(),
+            HashMap::from([
+                (
+                    vec![TYPE_Z.to_string()],
+                    DefineNode::Function(DefineFunctionNode::new(
+                        Token::with_value(TokenKind::Identifier, FUNCTION_NEG),
+                        TypeNode::new(vec![
+                            Token::with_value(TokenKind::Type, TYPE_Z),
+                            Token::with_value(TokenKind::Type, TYPE_Z),
+                        ]),
+                    )),
+                ),
+            ]),
         );
 
         let mut typechecker = Typechecker {
@@ -124,36 +154,57 @@ impl Typechecker {
 
         for define in defines {
             let symbol = define.symbol();
-            let name = symbol.value.clone().unwrap();
+            let name = symbol.value();
 
             match &define {
                 DefineNode::Function(node) => {
                     let (_, arg_types) = node.type_node.types.split_last().unwrap();
+                    let arg_types: Vec<String> =
+                        arg_types.iter().map(|token| token.value()).collect();
 
-                    if typechecker.defines.contains_key(&(name.clone(), arg_types.into())) {
+                    if typechecker
+                        .defines
+                        .get(&name)
+                        .map_or(false, |arg_map| arg_map.contains_key(&arg_types))
+                    {
                         errors.push(TypecheckerError::RedefinedFunction(symbol));
                     } else {
-                        typechecker.defines.insert((name, arg_types.into()), define.clone());
+                        typechecker
+                            .defines
+                            .entry(name.clone())
+                            .or_default()
+                            .insert(arg_types, define.clone());
                     }
-                },
+                }
                 DefineNode::Operator(node) => {
-                    let left_type = node.type_node.types[0].clone();
-                    let right_type = node.type_node.types[1].clone();
+                    let left_type = node.type_node.types[0].clone().value();
+                    let right_type = node.type_node.types[1].clone().value();
                     let arg_types = vec![left_type, right_type];
 
-                    if typechecker.defines.contains_key(&(name.clone(), arg_types.clone())) {
+                    if typechecker
+                        .defines
+                        .get(&name)
+                        .map_or(false, |arg_map| arg_map.contains_key(&arg_types))
+                    {
                         errors.push(TypecheckerError::RedefinedOperator(symbol));
                     } else {
-                        typechecker.defines.insert((name, arg_types), define.clone());
+                        typechecker
+                            .defines
+                            .entry(name.clone())
+                            .or_default()
+                            .insert(arg_types, define.clone());
                     }
-                },
+                }
                 DefineNode::Set(_) => {
-                    if typechecker.defines.contains_key(&(name.clone(), vec![])) {
+                    if typechecker.defines.contains_key(&name) {
                         errors.push(TypecheckerError::RedefinedType(symbol));
                     } else {
-                        typechecker.defines.insert((name, vec![]), define.clone());
+                        typechecker.defines
+                            .entry(name.clone())
+                            .or_default()
+                            .insert(vec![], define.clone());
                     }
-                },
+                }
             }
 
             match &define {
@@ -181,8 +232,8 @@ impl Typechecker {
 
         for token in &type_node.types {
             if token.kind == TokenKind::Type {
-                let name = token.value.clone().unwrap();
-                if !symbols.contains_key(&name) && !self.defines.contains_key(&(name, vec![])) {
+                let name = token.value();
+                if !symbols.contains_key(&name) && !self.defines.contains_key(&name) {
                     errors.push(TypecheckerError::UndefinedType(token.clone()));
                 }
             }
@@ -195,36 +246,40 @@ impl Typechecker {
         &self,
         expression: &mut ExpressionNode,
         symbols: &HashMap<String, TypeNode>,
-    ) -> (Option<TypeNode>, Vec<TypecheckerError>) {
+    ) -> (Option<Vec<String>>, Vec<TypecheckerError>) {
         match expression {
             ExpressionNode::Set(_) => todo!(),
             ExpressionNode::Type(_) => todo!(),
             ExpressionNode::Number(number_node) => {
-                let number: i64 = number_node.value.value.clone().unwrap().parse().unwrap();
+                let Ok(number) = number_node.value.value().parse::<i64>() else {
+                    return (
+                        None,
+                        vec![TypecheckerError::UndefinedLiteral(
+                            number_node.value.clone(),
+                        )],
+                    );
+                };
                 let type_value = if number >= 0 { TYPE_N } else { TYPE_Z };
 
-                let type_node = Some(TypeNode::new(vec![Token::value(TokenKind::Type, type_value)]));
+                number_node.node_type = Some(vec![type_value.to_string()]);
 
-                number_node.type_node = type_node.clone();
-
-                (type_node, vec![])
+                (number_node.node_type.clone(), vec![])
             }
             ExpressionNode::Literal(literal_node) => {
-                for ((symbol, _), define) in &self.defines {
-                    if let DefineNode::Set(node) = define {
-                        if node
-                            .set
-                            .elements
-                            .contains(&ExpressionNode::Literal(literal_node.clone()))
-                        {
-                            let type_node =
-                                Some(TypeNode::new(vec![Token::value(TokenKind::Type, symbol)]));
+                for (symbol, defines) in &self.defines {
+                    for (_, define) in defines {
+                        if let DefineNode::Set(node) = define {
+                            if node
+                                .set
+                                .elements
+                                .contains(&ExpressionNode::Literal(literal_node.clone()))
+                            {
+                                literal_node.node_type = Some(vec![symbol.clone()]);
 
-                            literal_node.type_node = type_node.clone();
-
-                            return (type_node, vec![]);
-                        }
-                    };
+                                return (literal_node.node_type.clone(), vec![]);
+                            }
+                        };
+                    }
                 }
 
                 (
@@ -235,10 +290,19 @@ impl Typechecker {
                 )
             }
             ExpressionNode::Variable(variable_node) => {
-                let name = variable_node.name.value.clone().unwrap();
+                let name = variable_node.name.value();
                 let mut errors = vec![];
 
-                let type_node = match symbols.get(&name) {
+                let type_node = match symbols.get(&name)
+                    .or(self.defines.get(&name).and_then(|arg_map| {
+                        arg_map.values().collect::<Vec<_>>().first().and_then(|define| {
+                            match define {
+                                DefineNode::Function(node) => Some(&node.type_node),
+                                _ => None,
+                            }
+                        })
+                    }))
+                {
                     Some(type_node) => Some(type_node.clone()),
                     None => {
                         errors.push(TypecheckerError::UndefinedVariable(
@@ -249,29 +313,31 @@ impl Typechecker {
                     }
                 };
 
-                variable_node.type_node = type_node.clone();
+                variable_node.node_type = type_node.map(|node| {
+                    node.types
+                        .iter()
+                        .map(|token| token.value())
+                        .collect::<Vec<_>>()
+                });
 
-                (type_node, errors)
+                (variable_node.node_type.clone(), errors)
             }
             ExpressionNode::Function(function_node) => {
-                let mut arg_types = vec![];
+                let mut arg_types: Vec<String> = vec![];
                 let mut errors = vec![];
+                let mut can_find = true;
 
                 for arg in function_node.arguments.iter_mut() {
                     let (arg_type, arg_errors) = self.check_expression(arg, symbols);
                     errors.extend(arg_errors);
 
-                    arg_types.push(arg_type.map(|t| t.types.first().cloned()).flatten());
+                    match arg_type {
+                        Some(t) => arg_types.extend(t),
+                        None => can_find = false,
+                    }
                 }
 
-                let name = function_node.name.value.clone().unwrap();
-
-                let arg_type_tokens: Vec<Token> = arg_types
-                    .iter()
-                    .filter_map(|t| t.clone())
-                    .collect();
-
-                if arg_type_tokens.len() != arg_types.len() {
+                if !can_find {
                     errors.push(TypecheckerError::UndefinedFunction {
                         token: function_node.name.clone(),
                         arg_types,
@@ -279,10 +345,17 @@ impl Typechecker {
                     return (None, errors);
                 }
 
-                let Some(function_type) = symbols.get(&name).or(match self.defines.get(&(name, arg_type_tokens)) {
-                    Some(DefineNode::Function(node)) => Some(&node.type_node),
-                    _ => None,
-                }) else {
+                let name = function_node.name.value();
+                let Some(function_type) =
+                    symbols
+                        .get(&name)
+                        .or(match self.defines.get(&name).and_then(|arg_map| {
+                            arg_map.get(&arg_types)
+                        }) {
+                            Some(DefineNode::Function(node)) => Some(&node.type_node),
+                            _ => None,
+                        })
+                else {
                     return (
                         None,
                         vec![TypecheckerError::UndefinedFunction {
@@ -292,77 +365,86 @@ impl Typechecker {
                     );
                 };
 
-                let function_type = function_type.types.last().unwrap();
+                let function_type = function_type
+                    .types
+                    .iter()
+                    .skip(arg_types.len())
+                    .map(|token| token.value())
+                    .collect::<Vec<_>>();
 
-                let type_node = Some(TypeNode::new(vec![function_type.clone()]));
+                function_node.node_type = Some(function_type);
 
-                function_node.type_node = type_node.clone();
-
-                (type_node, errors)
+                (function_node.node_type.clone(), errors)
             }
             ExpressionNode::Operator(operator_node) => {
-                let mut arg_types = vec![];
+                let mut arg_types: Vec<String> = vec![];
                 let mut errors = vec![];
+                let mut can_find = true;
 
                 let (left_type, left_errors) =
                     self.check_expression(&mut operator_node.left, symbols);
                 errors.extend(left_errors);
 
-                arg_types.push(left_type.clone().map(|t| t.types.first().cloned()).flatten());
+                match left_type {
+                    Some(ref t) => arg_types.extend(t.clone()),
+                    None => can_find = false,
+                }
 
                 let (right_type, right_errors) =
                     self.check_expression(&mut operator_node.right, symbols);
                 errors.extend(right_errors);
 
-                arg_types.push(right_type.clone().map(|t| t.types.first().cloned()).flatten());
+                match right_type {
+                    Some(ref t) => arg_types.extend(t.clone()),
+                    None => can_find = false,
+                }
 
-                let name = operator_node.operator.value.clone().unwrap();
-
-                let arg_type_tokens: Vec<Token> = arg_types
-                    .iter()
-                    .filter_map(|t| t.clone())
-                    .collect();
-
-                if (arg_type_tokens.len() != arg_types.len())
-                    || (arg_type_tokens.len() != 2)
-                {
+                if !can_find {
                     errors.push(TypecheckerError::UndefinedOperator {
                         token: operator_node.operator.clone(),
-                        left_type: arg_types[0].clone(),
-                        right_type: arg_types[1].clone(),
+                        left_type,
+                        right_type,
                     });
 
                     return (None, errors);
                 }
 
+                let name = operator_node.operator.value();
                 let Some(operator_type) =
                     symbols
                         .get(&name)
-                        .or(match self.defines.get(&(name, arg_type_tokens)) {
+                        .or(match self.defines.get(&name).and_then(|arg_map| {
+                            arg_map.get(&arg_types)
+                        }) {
                             Some(DefineNode::Operator(node)) => Some(&node.type_node),
                             _ => None,
                         })
                 else {
                     errors.push(TypecheckerError::UndefinedOperator {
                         token: operator_node.operator.clone(),
-                        left_type: arg_types[0].clone(),
-                        right_type: arg_types[1].clone(),
+                        left_type,
+                        right_type,
                     });
 
                     return (None, errors);
                 };
 
-                let type_node = Some(TypeNode::new(vec![operator_type.types[2].clone()]));
+                let operator_type = operator_type
+                    .types
+                    .iter()
+                    .skip(arg_types.len())
+                    .map(|token| token.value())
+                    .collect::<Vec<_>>();
 
-                operator_node.type_node = type_node.clone();
+                operator_node.node_type = Some(operator_type);
 
-                (type_node, errors)
+                (operator_node.node_type.clone(), errors)
             }
             ExpressionNode::Paren(paren_node) => {
                 let (type_node, paren_errors) =
                     self.check_expression(&mut paren_node.expression, symbols);
 
-                paren_node.type_node = type_node.clone();
+                paren_node.node_type = type_node.clone();
 
                 (type_node, paren_errors)
             }
@@ -379,7 +461,7 @@ impl Typechecker {
         match statement {
             StatementNode::Quantifier(quantifier_node) => {
                 let symbol = quantifier_node.symbol.clone();
-                let name = symbol.value.clone().unwrap();
+                let name = symbol.value();
                 if let hash_map::Entry::Vacant(e) = symbols.entry(name) {
                     e.insert(quantifier_node.type_node.clone());
                 } else {
@@ -395,12 +477,8 @@ impl Typechecker {
                 errors.extend(right_errors);
 
                 if let (Some(left_type), Some(right_type)) = (left_type, right_type) {
-                    if left_type.types.len() != right_type.types.len()
-                        || left_type
-                            .types
-                            .iter()
-                            .zip(right_type.types.iter())
-                            .any(|(l, r)| l.value != r.value)
+                    if left_type.len() != right_type.len()
+                        || left_type.iter().zip(right_type.iter()).any(|(l, r)| l != r)
                     {
                         errors.push(TypecheckerError::RelationTypeMissmatch {
                             relation: relation_node.token.clone(),
@@ -437,42 +515,48 @@ impl Typechecker {
                     eprintln!(
                         "{}, Type is not defined {}",
                         self.sourcemap.format_pos(token),
-                        token.value.clone().unwrap()
+                        token.value()
                     );
                 }
                 TypecheckerError::UndefinedLiteral(token) => {
                     eprintln!(
                         "{}, Literal is not defined \"{}\"",
                         self.sourcemap.format_pos(token),
-                        token.value.clone().unwrap()
+                        token.value()
                     );
                 }
                 TypecheckerError::UndefinedVariable(token) => {
                     eprintln!(
                         "{}, Variable is not defined {}",
                         self.sourcemap.format_pos(token),
-                        token.value.clone().unwrap()
+                        token.value()
                     );
                 }
                 TypecheckerError::UndefinedFunction { token, arg_types } => {
                     eprintln!(
-                        "{}, Function {} with arguments {} is not defined",
+                        "{}, Function {} with type {} is not defined",
                         self.sourcemap.format_pos(token),
-                        token.value.clone().unwrap(),
-                        arg_types
-                            .iter()
-                            .map(|t| t.clone().map(|t| t.value.clone().unwrap()).unwrap_or("?".to_string()))
-                            .collect::<Vec<_>>()
-                            .join(", ")
+                        token.value(),
+                        arg_types.join(" -> ")
                     );
                 }
-                TypecheckerError::UndefinedOperator { token, left_type, right_type } => {
+                TypecheckerError::UndefinedOperator {
+                    token,
+                    left_type,
+                    right_type,
+                } => {
                     eprintln!(
                         "{}, Operator {} is not defined with left type {} and right type {}",
                         self.sourcemap.format_pos(token),
-                        token.value.clone().unwrap(),
-                        left_type.clone().map(|t| t.value.clone().unwrap()).unwrap_or("?".to_string()),
-                        right_type.clone().map(|t| t.value.clone().unwrap()).unwrap_or("?".to_string())
+                        token.value(),
+                        left_type
+                            .as_ref()
+                            .map(|t| t.join(" -> "))
+                            .unwrap_or("?".to_string()),
+                        right_type
+                            .clone()
+                            .map(|t| t.join(" -> "))
+                            .unwrap_or("?".to_string())
                     );
                 }
                 TypecheckerError::RelationTypeMissmatch {
@@ -483,36 +567,36 @@ impl Typechecker {
                     eprintln!(
                         "{}, Relation: Cannot compare Types {} and {}",
                         self.sourcemap.format_pos(relation),
-                        expected,
-                        found,
+                        expected.join(" -> "),
+                        found.join(" -> ")
                     );
                 }
                 TypecheckerError::RedefinedVariable(token) => {
                     eprintln!(
                         "{}, Variable is already defined {}",
                         self.sourcemap.format_pos(token),
-                        token.value.clone().unwrap()
+                        token.value()
                     );
                 }
                 TypecheckerError::RedefinedFunction(token) => {
                     eprintln!(
                         "{}, Function is already defined {}",
                         self.sourcemap.format_pos(token),
-                        token.value.clone().unwrap()
+                        token.value()
                     );
                 }
                 TypecheckerError::RedefinedOperator(token) => {
                     eprintln!(
                         "{}, Operator is already defined {}",
                         self.sourcemap.format_pos(token),
-                        token.value.clone().unwrap()
+                        token.value()
                     );
                 }
                 TypecheckerError::RedefinedType(token) => {
                     eprintln!(
                         "{}, Type is already defined {}",
                         self.sourcemap.format_pos(token),
-                        token.value.clone().unwrap()
+                        token.value()
                     );
                 }
             }

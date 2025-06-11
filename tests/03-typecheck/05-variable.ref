@@ -1,5 +1,5 @@
 tests/03-typecheck/05-variable.croof:3:1, Variable is not defined a
 tests/03-typecheck/05-variable.croof:3:3, Operator + is not defined with left type ? and right type N
-tests/03-typecheck/05-variable.croof:3:13, Function f with arguments N is not defined
+tests/03-typecheck/05-variable.croof:3:13, Function f with type N is not defined
 tests/03-typecheck/05-variable.croof:3:11, Operator * is not defined with left type N and right type ?
 Typechecking failed with 4 errors

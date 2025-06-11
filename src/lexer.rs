@@ -34,11 +34,11 @@ pub enum TokenKind {
 #[derive(Debug, Clone, Default)]
 pub struct Token {
     pub kind: TokenKind,
-    pub value: Option<String>,
+    value: Option<String>,
 
     // Token Info (should be ignored in equality checks or hashing)
-    pub pos: usize,
-    pub source_id: usize,
+    pos: usize,
+    source_id: usize,
 }
 
 impl PartialEq for Token {
@@ -82,7 +82,7 @@ impl Token {
         }
     }
 
-    pub fn value<S>(kind: TokenKind, value: S) -> Self
+    pub fn with_value<S>(kind: TokenKind, value: S) -> Self
     where
         S: Into<String>,
     {
@@ -92,6 +92,10 @@ impl Token {
             pos: 0,
             source_id: 0,
         }
+    }
+
+    pub fn value(&self) -> String {
+        self.value.as_deref().unwrap_or("?").to_string()
     }
 }
 
@@ -133,7 +137,7 @@ impl Lexer {
 
     fn tokenize_symbol(&mut self) -> Token {
         if !issymbol(self.ch) {
-            return Token::value(TokenKind::Illegal, self.ch);
+            return Token::with_value(TokenKind::Illegal, self.ch);
         }
 
         let mut value = String::new();
@@ -151,13 +155,13 @@ impl Lexer {
         } else if value == ">" {
             Token::new(TokenKind::GreaterThan)
         } else {
-            Token::value(TokenKind::Operator, value)
+            Token::with_value(TokenKind::Operator, value)
         }
     }
 
     fn tokenize_number(&mut self) -> Token {
         if !(self.ch.is_ascii_digit() || (self.ch == '-' && self.peek().is_ascii_digit())) {
-            return Token::value(TokenKind::Illegal, self.ch);
+            return Token::with_value(TokenKind::Illegal, self.ch);
         }
 
         let mut value = String::new();
@@ -170,12 +174,12 @@ impl Lexer {
         }
 
         // TODO: Handle decimal numbers and scientific notation
-        Token::value(TokenKind::Number, value)
+        Token::with_value(TokenKind::Number, value)
     }
 
     fn tokenize_type(&mut self) -> Token {
         if !self.ch.is_uppercase() {
-            return Token::value(TokenKind::Illegal, self.ch);
+            return Token::with_value(TokenKind::Illegal, self.ch);
         }
 
         let mut value = String::new();
@@ -184,12 +188,12 @@ impl Lexer {
             self.read();
         }
 
-        Token::value(TokenKind::Type, value)
+        Token::with_value(TokenKind::Type, value)
     }
 
     fn tokenize_identifier(&mut self) -> Token {
         if !self.ch.is_lowercase() {
-            return Token::value(TokenKind::Illegal, self.ch);
+            return Token::with_value(TokenKind::Illegal, self.ch);
         }
 
         let mut value = String::new();
@@ -207,13 +211,13 @@ impl Lexer {
         } else if value == "def" {
             Token::new(TokenKind::Def)
         } else {
-            Token::value(TokenKind::Identifier, value)
+            Token::with_value(TokenKind::Identifier, value)
         }
     }
 
     fn tokenize_string(&mut self) -> Token {
         if self.ch != '"' {
-            return Token::value(TokenKind::Illegal, self.ch);
+            return Token::with_value(TokenKind::Illegal, self.ch);
         }
         self.read();
 
@@ -229,7 +233,7 @@ impl Lexer {
         }
         self.read();
 
-        Token::value(TokenKind::Literal, value)
+        Token::with_value(TokenKind::Literal, value)
     }
 
     pub fn new(file: SourceFile) -> Self {
@@ -283,13 +287,15 @@ impl Lexer {
                 Token::new(TokenKind::Colon)
             }
             '"' => self.tokenize_string(),
-            _ if self.ch.is_ascii_digit() || (self.ch == '-' && self.peek().is_ascii_digit()) => self.tokenize_number(),
+            _ if self.ch.is_ascii_digit() || (self.ch == '-' && self.peek().is_ascii_digit()) => {
+                self.tokenize_number()
+            }
             _ if issymbol(self.ch) => self.tokenize_symbol(),
             _ if self.ch.is_uppercase() => self.tokenize_type(),
             _ if self.ch.is_lowercase() => self.tokenize_identifier(),
             illegal => {
                 self.read();
-                Token::value(TokenKind::Illegal, illegal)
+                Token::with_value(TokenKind::Illegal, illegal)
             }
         };
 

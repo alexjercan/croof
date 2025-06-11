@@ -41,7 +41,7 @@ impl Display for TypeNode {
             "{}",
             self.types
                 .iter()
-                .map(|t| t.value.clone().unwrap())
+                .map(|t| t.value())
                 .collect::<Vec<String>>()
                 .join(" -> ")
         )
@@ -86,7 +86,7 @@ impl Display for QuantifierNode {
             f,
             "{} {} : {}",
             self.kind,
-            self.symbol.value.clone().unwrap(),
+            self.symbol.value(),
             self.type_node
         )
     }
@@ -113,42 +113,50 @@ impl Display for SetNode {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NumberNode {
     pub value: Token,
-    pub type_node: Option<TypeNode>,
+    pub node_type: Option<Vec<String>>,
 }
 
 impl NumberNode {
     pub fn new(value: Token) -> Self {
         NumberNode {
             value,
-            type_node: None,
+            node_type: None,
         }
     }
 
-    pub fn typed(value: Token, type_node: TypeNode) -> Self {
+    pub fn with_type<S>(value: Token, node_type: S) -> Self where
+        S: Into<String>, {
         NumberNode {
             value,
-            type_node: Some(type_node),
+            node_type: Some(vec![node_type.into()]),
         }
     }
 }
 
 impl Display for NumberNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value.value.clone().unwrap())
+        write!(f, "{}", self.value.value())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LiteralNode {
     pub value: Token,
-    pub type_node: Option<TypeNode>,
+    pub node_type: Option<Vec<String>>,
 }
 
 impl LiteralNode {
     pub fn new(value: Token) -> Self {
         LiteralNode {
             value,
-            type_node: None,
+            node_type: None,
+        }
+    }
+
+    pub fn with_type<S>(value: Token, type_node: S) -> Self where S: Into<String> {
+        LiteralNode {
+            value,
+            node_type: Some(vec![type_node.into()]),
         }
     }
 }
@@ -156,28 +164,35 @@ impl LiteralNode {
 impl Display for LiteralNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // TODO: just for visuals maybe escape the string
-        write!(f, "\"{}\"", self.value.value.clone().unwrap())
+        write!(f, "\"{}\"", self.value.value())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableNode {
     pub name: Token,
-    pub type_node: Option<TypeNode>,
+    pub node_type: Option<Vec<String>>,
 }
 
 impl VariableNode {
     pub fn new(name: Token) -> Self {
         VariableNode {
             name,
-            type_node: None,
+            node_type: None,
+        }
+    }
+
+    pub fn with_type<S>(name: Token, node_type: Vec<S>) -> Self where S: Into<String> {
+        VariableNode {
+            name,
+            node_type: Some(node_type.into_iter().map(Into::into).collect()),
         }
     }
 }
 
 impl Display for VariableNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name.value.clone().unwrap())
+        write!(f, "{}", self.name.value())
     }
 }
 
@@ -185,7 +200,7 @@ impl Display for VariableNode {
 pub struct FunctionNode {
     pub name: Token,
     pub arguments: Vec<ExpressionNode>,
-    pub type_node: Option<TypeNode>,
+    pub node_type: Option<Vec<String>>,
 }
 
 impl FunctionNode {
@@ -193,15 +208,16 @@ impl FunctionNode {
         FunctionNode {
             name,
             arguments,
-            type_node: None,
+            node_type: None,
         }
     }
 
-    pub fn typed(name: Token, arguments: Vec<ExpressionNode>, type_node: TypeNode) -> Self {
+    pub fn with_type<S>(name: Token, arguments: Vec<ExpressionNode>, node_type: Vec<S>) -> Self
+    where S: Into<String> {
         FunctionNode {
             name,
             arguments,
-            type_node: Some(type_node),
+            node_type: Some(node_type.into_iter().map(Into::into).collect()),
         }
     }
 }
@@ -209,12 +225,7 @@ impl FunctionNode {
 impl Display for FunctionNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let args: Vec<String> = self.arguments.iter().map(|e| e.to_string()).collect();
-        write!(
-            f,
-            "{}({})",
-            self.name.value.clone().unwrap(),
-            args.join(", ")
-        )
+        write!(f, "{}({})", self.name.value(), args.join(", "))
     }
 }
 
@@ -223,7 +234,7 @@ pub struct OperatorNode {
     pub operator: Token,
     pub left: Box<ExpressionNode>,
     pub right: Box<ExpressionNode>,
-    pub type_node: Option<TypeNode>,
+    pub node_type: Option<Vec<String>>,
 }
 
 impl OperatorNode {
@@ -232,34 +243,49 @@ impl OperatorNode {
             operator,
             left: Box::new(left),
             right: Box::new(right),
-            type_node: None,
+            node_type: None,
+        }
+    }
+
+    pub fn with_type<S>(
+        operator: Token,
+        left: ExpressionNode,
+        right: ExpressionNode,
+        node_type: Vec<S>,
+    ) -> Self where S: Into<String> {
+        OperatorNode {
+            operator,
+            left: Box::new(left),
+            right: Box::new(right),
+            node_type: Some(node_type.into_iter().map(Into::into).collect()),
         }
     }
 }
 
 impl Display for OperatorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {} {}",
-            self.left,
-            self.operator.value.clone().unwrap(),
-            self.right
-        )
+        write!(f, "{} {} {}", self.left, self.operator.value(), self.right)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParenNode {
     pub expression: Box<ExpressionNode>,
-    pub type_node: Option<TypeNode>,
+    pub node_type: Option<Vec<String>>,
 }
 
 impl ParenNode {
     pub fn new(expression: ExpressionNode) -> Self {
         ParenNode {
             expression: Box::new(expression),
-            type_node: None,
+            node_type: None,
+        }
+    }
+
+    pub fn with_type<S>(expression: ExpressionNode, node_type: Vec<S>) -> Self where S: Into<String> {
+        ParenNode {
+            expression: Box::new(expression),
+            node_type: Some(node_type.into_iter().map(Into::into).collect()),
         }
     }
 }
@@ -319,16 +345,16 @@ impl ExpressionNode {
         }
     }
 
-    pub fn type_node(&self) -> Option<TypeNode> {
+    pub fn node_type(&self) -> Option<Vec<String>> {
         match self {
             ExpressionNode::Set(_) => todo!(),
             ExpressionNode::Type(_) => todo!(),
-            ExpressionNode::Number(node) => node.type_node.clone(),
-            ExpressionNode::Literal(node) => node.type_node.clone(),
-            ExpressionNode::Variable(node) => node.type_node.clone(),
-            ExpressionNode::Function(node) => node.type_node.clone(),
-            ExpressionNode::Operator(node) => node.type_node.clone(),
-            ExpressionNode::Paren(node) => node.type_node.clone(),
+            ExpressionNode::Number(node) => node.node_type.clone(),
+            ExpressionNode::Literal(node) => node.node_type.clone(),
+            ExpressionNode::Variable(node) => node.node_type.clone(),
+            ExpressionNode::Function(node) => node.node_type.clone(),
+            ExpressionNode::Operator(node) => node.node_type.clone(),
+            ExpressionNode::Paren(node) => node.node_type.clone(),
         }
     }
 
@@ -356,18 +382,22 @@ impl PartialOrd for ExpressionNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {
             (ExpressionNode::Number(node), ExpressionNode::Number(other)) => {
-                let type_node = node.type_node.clone()?.types.first()?.value.clone()?;
-                let type_other = other.type_node.clone()?.types.first()?.value.clone()?;
+                let type_node = node.clone().node_type?.first()?.clone();
+                let type_other = other.clone().node_type?.first()?.clone();
 
                 if type_node == type_other {
-                    let number_node = node.value.value.clone()?.parse::<i64>().unwrap();
-                    let other_node = other.value.value.clone()?.parse::<i64>().unwrap();
+                    let Ok(number_node) = node.value.value().parse::<i64>() else {
+                        return None;
+                    };
+                    let Ok(other_node) = other.value.value().parse::<i64>() else {
+                        return None;
+                    };
 
                     return number_node.partial_cmp(&other_node);
                 }
 
                 None
-            },
+            }
             _ => None,
         }
     }
@@ -474,12 +504,7 @@ impl DefineFunctionNode {
 
 impl Display for DefineFunctionNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} : {}",
-            self.symbol.value.clone().unwrap(),
-            self.type_node
-        )
+        write!(f, "{} : {}", self.symbol.value(), self.type_node)
     }
 }
 
@@ -497,12 +522,7 @@ impl DefineOperatorNode {
 
 impl Display for DefineOperatorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} : {}",
-            self.symbol.value.clone().unwrap(),
-            self.type_node
-        )
+        write!(f, "{} : {}", self.symbol.value(), self.type_node)
     }
 }
 
@@ -530,7 +550,7 @@ impl Hash for DefineSetNode {
 
 impl Display for DefineSetNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} = {}", self.symbol.value.clone().unwrap(), self.set)
+        write!(f, "{} = {}", self.symbol.value(), self.set)
     }
 }
 

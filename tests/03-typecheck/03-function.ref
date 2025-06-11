@@ -1,2 +1,2 @@
-tests/03-typecheck/03-function.croof:5:1, Function f with arguments N is not defined
+tests/03-typecheck/03-function.croof:5:1, Function f with type N is not defined
 Typechecking failed with 1 error
