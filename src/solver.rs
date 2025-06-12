@@ -9,7 +9,7 @@ use crate::{
         BindingNode, ExpressionNode, ImplicationNode, NumberNode, ParenNode, RelationKind,
         RelationNode, StatementNode,
     },
-    typechecker::{FUNCTION_N, FUNCTION_NEG, FUNCTION_SUCC, FUNCTION_Z, TYPE_N, TYPE_Z},
+    typechecker::{can_infer_type, FUNCTION_NEG, FUNCTION_SUCC, TYPE_N, TYPE_Z},
 };
 
 pub type ProofStep = (ExpressionNode, ExpressionNode, ImplicationNode);
@@ -44,7 +44,13 @@ fn create_mapping_helper(
     to: &ExpressionNode,
     mapping: &mut HashMap<ExpressionNode, ExpressionNode>,
 ) -> bool {
-    if from.node_type() != to.node_type() {
+    let Some(from_type) = from.node_type() else {
+        return false;
+    };
+    let Some(to_type) = to.node_type() else {
+        return false;
+    };
+    if !can_infer_type(&from_type, &to_type) {
         return false;
     }
 
@@ -222,54 +228,59 @@ fn substitute_builtin_helper(
                 Some(TYPE_Z) => {
                     let value = expr_node.value.value();
                     let value = value.parse::<i64>().unwrap();
-                    if value > 0 {
-                        let number = NumberNode::with_type(
-                            Token::with_value(TokenKind::Number, (value - 1).to_string()),
-                            TYPE_Z,
-                        );
-                        let function = BindingNode::with_type(
-                            Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
-                            vec![ExpressionNode::Number(number.clone())],
-                            vec![TYPE_Z],
-                        );
-                        let substitution = ExpressionNode::Binding(function);
 
-                        let implication = ImplicationNode::new(
-                            vec![],
-                            vec![StatementNode::Relation(RelationNode::new(
-                                RelationKind::Equality,
-                                Token::new(TokenKind::Equal),
-                                expression.clone(),
-                                substitution.clone(),
-                            ))],
-                        );
+                    match value {
+                        value if value > 0 => {
+                            let number = NumberNode::with_type(
+                                Token::with_value(TokenKind::Number, (value - 1).to_string()),
+                                TYPE_Z,
+                            );
+                            let function = BindingNode::with_type(
+                                Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
+                                vec![ExpressionNode::Number(number.clone())],
+                                vec![TYPE_Z],
+                            );
+                            let substitution = ExpressionNode::Binding(function);
 
-                        substitutions.push((substitution.clone(), implication));
-                    } else if value < 0 {
-                        let number = NumberNode::with_type(
-                            Token::with_value(TokenKind::Number, (-value).to_string()),
-                            TYPE_Z,
-                        );
-                        let function = BindingNode::with_type(
-                            Token::with_value(TokenKind::Identifier, FUNCTION_NEG),
-                            vec![ExpressionNode::Number(number.clone())],
-                            vec![TYPE_Z],
-                        );
-                        let substitution = ExpressionNode::Binding(function);
+                            let implication = ImplicationNode::new(
+                                vec![],
+                                vec![StatementNode::Relation(RelationNode::new(
+                                    RelationKind::Equality,
+                                    Token::new(TokenKind::Equal),
+                                    expression.clone(),
+                                    substitution.clone(),
+                                ))],
+                            );
 
-                        let implication = ImplicationNode::new(
-                            vec![],
-                            vec![StatementNode::Relation(RelationNode::new(
-                                RelationKind::Equality,
-                                Token::new(TokenKind::Equal),
-                                expression.clone(),
-                                substitution.clone(),
-                            ))],
-                        );
+                            substitutions.push((substitution.clone(), implication));
+                        }
+                        value if value < 0 => {
+                            let number = NumberNode::with_type(
+                                Token::with_value(TokenKind::Number, (-value).to_string()),
+                                TYPE_Z,
+                            );
+                            let function = BindingNode::with_type(
+                                Token::with_value(TokenKind::Identifier, FUNCTION_NEG),
+                                vec![ExpressionNode::Number(number.clone())],
+                                vec![TYPE_Z],
+                            );
+                            let substitution = ExpressionNode::Binding(function);
 
-                        substitutions.push((substitution.clone(), implication));
+                            let implication = ImplicationNode::new(
+                                vec![],
+                                vec![StatementNode::Relation(RelationNode::new(
+                                    RelationKind::Equality,
+                                    Token::new(TokenKind::Equal),
+                                    expression.clone(),
+                                    substitution.clone(),
+                                ))],
+                            );
+
+                            substitutions.push((substitution.clone(), implication));
+                        }
+                        _ => {},
                     }
-                },
+                }
                 _ => todo!(),
             }
         }
@@ -281,72 +292,32 @@ fn substitute_builtin_helper(
             }
 
             match expr_node.name.value().as_ref() {
-                FUNCTION_N => {
-                    if let Some(ExpressionNode::Number(number_node)) = expr_node.arguments.first() {
-                        let value = number_node.value.value().parse::<u64>().unwrap();
-
-                        let number = NumberNode::with_type(
-                            Token::with_value(TokenKind::Number, value.to_string()),
-                            TYPE_N,
-                        );
-                        let substitution = ExpressionNode::Number(number);
-
-                        let implication = ImplicationNode::new(
-                            vec![],
-                            vec![StatementNode::Relation(RelationNode::new(
-                                RelationKind::Equality,
-                                Token::new(TokenKind::Equal),
-                                expression.clone(),
-                                substitution.clone(),
-                            ))],
-                        );
-
-                        substitutions.push((substitution.clone(), implication));
-                    }
-                }
                 FUNCTION_SUCC => {
                     if let Some(ExpressionNode::Number(number_node)) = expr_node.arguments.first() {
-                        let number = match number_node.node_type.as_ref().and_then(|t| t.first()).cloned().as_deref() {
+                        let number = match number_node
+                            .node_type
+                            .as_ref()
+                            .and_then(|t| t.first())
+                            .cloned()
+                            .as_deref()
+                        {
                             Some(TYPE_N) => {
                                 let value = number_node.value.value().parse::<u64>().unwrap();
                                 NumberNode::with_type(
                                     Token::with_value(TokenKind::Number, (value + 1).to_string()),
                                     TYPE_N,
                                 )
-                            },
+                            }
                             Some(TYPE_Z) => {
                                 let value = number_node.value.value().parse::<i64>().unwrap();
                                 NumberNode::with_type(
                                     Token::with_value(TokenKind::Number, (value + 1).to_string()),
                                     TYPE_Z,
                                 )
-                            },
+                            }
                             _ => todo!("Unsupported type for function 'succ'"),
                         };
 
-                        let substitution = ExpressionNode::Number(number);
-
-                        let implication = ImplicationNode::new(
-                            vec![],
-                            vec![StatementNode::Relation(RelationNode::new(
-                                RelationKind::Equality,
-                                Token::new(TokenKind::Equal),
-                                expression.clone(),
-                                substitution.clone(),
-                            ))],
-                        );
-
-                        substitutions.push((substitution.clone(), implication));
-                    }
-                }
-                FUNCTION_Z => {
-                    if let Some(ExpressionNode::Number(number_node)) = expr_node.arguments.first() {
-                        let value = number_node.value.value().parse::<u64>().unwrap();
-
-                        let number = NumberNode::with_type(
-                            Token::with_value(TokenKind::Number, value.to_string()),
-                            TYPE_Z,
-                        );
                         let substitution = ExpressionNode::Number(number);
 
                         let implication = ImplicationNode::new(
@@ -696,13 +667,6 @@ impl Solver {
             for (substituted, steps) in self.substitute(expression, implication) {
                 substitutions.push((substituted, implication.clone(), steps));
             }
-        }
-
-        for substitution in &substitutions {
-            println!(
-                "Substitution: {} => {} (apply {})",
-                expression, substitution.0, substitution.1
-            );
         }
 
         substitutions
