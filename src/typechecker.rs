@@ -16,6 +16,7 @@ pub const TYPE_Z: &str = "Z";
 pub const FUNCTION_Z: &str = "z"; // N -> Z
 pub const FUNCTION_NEG: &str = "neg"; // Z -> Z
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypecheckerError {
     UndefinedType(Token),
     UndefinedLiteral(Token),
@@ -254,7 +255,7 @@ impl Typechecker {
             }
             ExpressionNode::Literal(literal_node) => {
                 for (symbol, defines) in &self.defines {
-                    for (_, define) in defines {
+                    for define in defines.values() {
                         if let DefineNode::Set(node) = define {
                             if node
                                 .set
@@ -302,11 +303,15 @@ impl Typechecker {
                 let name = node.name.value();
                 let Some(node_type) = symbols.get(&name).or(
                     match self.defines.get(&name).and_then(|arg_map| {
-                        arg_map.get(&arg_types).or(arg_map
-                            .values()
-                            .collect::<Vec<_>>()
-                            .first()
-                            .cloned())
+                        if arg_types.is_empty() {
+                            arg_map.get(&vec![]).or(arg_map
+                                .values()
+                                .collect::<Vec<_>>()
+                                .first()
+                                .cloned())
+                        } else {
+                            arg_map.get(&arg_types)
+                        }
                     }) {
                         Some(DefineNode::Function(node)) => Some(&node.type_node),
                         _ => None,
@@ -488,7 +493,6 @@ impl Typechecker {
                             self.sourcemap.format_pos(token),
                             token.value()
                         );
-                        return;
                     } else {
                         eprintln!(
                             "{}, Binding {} with input type {} is not defined",
@@ -531,21 +535,21 @@ impl Typechecker {
                 }
                 TypecheckerError::RedefinedBinding(token) => {
                     eprintln!(
-                        "{}, Binding is already defined {}",
+                        "{}, Binding {} is already defined",
                         self.sourcemap.format_pos(token),
                         token.value()
                     );
                 }
                 TypecheckerError::RedefinedOperator(token) => {
                     eprintln!(
-                        "{}, Operator is already defined {}",
+                        "{}, Operator {} is already defined",
                         self.sourcemap.format_pos(token),
                         token.value()
                     );
                 }
                 TypecheckerError::RedefinedType(token) => {
                     eprintln!(
-                        "{}, Type is already defined {}",
+                        "{}, Type {} is already defined",
                         self.sourcemap.format_pos(token),
                         token.value()
                     );
