@@ -1,3 +1,5 @@
+forall a : N => succ(z(a)) = z(succ(a))
+
 def abs : Z -> Z
 
 abs(z(0)) = z(0)
@@ -6,8 +8,13 @@ forall a : Z, a > z(0) => abs(a) = a
 
 def + : Z -> Z -> Z
 
-forall a : Z => z(0) + a = a
+forall a : Z => z(0) + a = a # Identity for Addition
+forall a : Z, forall b : Z => succ(a) + b = a + succ(b) # Successor Property for Addition
+
+forall a : Z, forall b : Z => a + b = b + a # Commutativity of Addition
+forall a : Z, forall b : Z, forall c : Z => (a + b) + c = a + (b + c) # Associativity of Addition
 
 eval abs(-1)
 eval z(0) + -1
+eval z(1) + -1
 # eval n(abs(z(2))) + n(abs(-1))

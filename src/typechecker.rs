@@ -60,6 +60,18 @@ impl Typechecker {
             )]),
         );
 
+        // def Z = { }
+        mapping.insert(
+            TYPE_Z.to_string(),
+            HashMap::from([(
+                vec![],
+                DefineNode::Set(DefineSetNode::new(
+                    Token::with_value(TokenKind::Type, TYPE_Z),
+                    SetNode::new(vec![]),
+                )),
+            )]),
+        );
+
         // def n : Z -> N
         mapping.insert(
             FUNCTION_N.to_string(),
@@ -71,33 +83,6 @@ impl Typechecker {
                         Token::with_value(TokenKind::Type, TYPE_Z),
                         Token::with_value(TokenKind::Type, TYPE_N),
                     ]),
-                )),
-            )]),
-        );
-
-        // def succ : N -> N
-        mapping.insert(
-            FUNCTION_SUCC.to_string(),
-            HashMap::from([(
-                vec![TYPE_N.to_string()],
-                DefineNode::Function(DefineFunctionNode::new(
-                    Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
-                    TypeNode::new(vec![
-                        Token::with_value(TokenKind::Type, TYPE_N),
-                        Token::with_value(TokenKind::Type, TYPE_N),
-                    ]),
-                )),
-            )]),
-        );
-
-        // def Z = { }
-        mapping.insert(
-            TYPE_Z.to_string(),
-            HashMap::from([(
-                vec![],
-                DefineNode::Set(DefineSetNode::new(
-                    Token::with_value(TokenKind::Type, TYPE_Z),
-                    SetNode::new(vec![]),
                 )),
             )]),
         );
@@ -115,6 +100,33 @@ impl Typechecker {
                     ]),
                 )),
             )]),
+        );
+
+        // def succ : N -> N, Z -> Z
+        mapping.insert(
+            FUNCTION_SUCC.to_string(),
+            HashMap::from([
+                (
+                    vec![TYPE_N.to_string()],
+                    DefineNode::Function(DefineFunctionNode::new(
+                        Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
+                        TypeNode::new(vec![
+                            Token::with_value(TokenKind::Type, TYPE_N),
+                            Token::with_value(TokenKind::Type, TYPE_N),
+                        ]),
+                    )),
+                ),
+                (
+                    vec![TYPE_Z.to_string()],
+                    DefineNode::Function(DefineFunctionNode::new(
+                        Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
+                        TypeNode::new(vec![
+                            Token::with_value(TokenKind::Type, TYPE_Z),
+                            Token::with_value(TokenKind::Type, TYPE_Z),
+                        ]),
+                    )),
+                ),
+            ]),
         );
 
         // def neg : Z -> Z
