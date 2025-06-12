@@ -1,6 +1,9 @@
-# succ : N -> N
 def apply : N -> N -> N -> N
+
+def test : N -> N
+test(0) = 0
+forall n : N => test(n) = 1
 
 forall a : N, forall f : N -> N  => apply(f, a) = f(a)
 
-eval apply(succ, 1)
+eval apply(test, 0)

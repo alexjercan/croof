@@ -6,8 +6,8 @@ use std::{
 use crate::{
     lexer::{Token, TokenKind},
     parser::{
-        ExpressionNode, FunctionNode, ImplicationNode, NumberNode, ParenNode, RelationKind,
-        RelationNode, StatementNode, VariableNode,
+        BindingNode, ExpressionNode, ImplicationNode, NumberNode, ParenNode, RelationKind,
+        RelationNode, StatementNode,
     },
     typechecker::{FUNCTION_N, FUNCTION_NEG, FUNCTION_SUCC, FUNCTION_Z, TYPE_N, TYPE_Z},
 };
@@ -59,22 +59,23 @@ fn create_mapping_helper(
             ExpressionNode::Literal(from_node) => to_node.value == from_node.value,
             _ => false,
         },
-        ExpressionNode::Variable(_) => {
-            let has_mapping = mapping.contains_key(to);
-            let should_substitute = !has_mapping || mapping.get(to) == Some(from);
+        ExpressionNode::Binding(to_node) => {
+            if to_node.arguments.len() == 0 {
+                let has_mapping = mapping.contains_key(to);
+                let should_substitute = !has_mapping || mapping.get(to) == Some(from);
 
-            if !has_mapping {
-                mapping.insert(to.clone(), from.clone());
+                if !has_mapping {
+                    mapping.insert(to.clone(), from.clone());
+                }
+
+                return should_substitute;
             }
 
-            should_substitute
-        }
-        ExpressionNode::Function(to_node) => {
             match from {
-                ExpressionNode::Function(function_node) => {
-                    to_node.name == function_node.name
-                        && to_node.arguments.len() == function_node.arguments.len()
-                        && to_node.arguments.iter().zip(&function_node.arguments).all(
+                ExpressionNode::Binding(from_node) => {
+                    to_node.name == from_node.name
+                        && to_node.arguments.len() == from_node.arguments.len()
+                        && to_node.arguments.iter().zip(&from_node.arguments).all(
                             |(to_arg, from_arg)| create_mapping_helper(from_arg, to_arg, mapping),
                         )
                 }
@@ -119,20 +120,28 @@ fn apply_mapping(
         ExpressionNode::Type(_) => todo!(),
         ExpressionNode::Number(_) => Some(expression.clone()),
         ExpressionNode::Literal(_) => Some(expression.clone()),
-        ExpressionNode::Variable(_) => mapping.get(expression).cloned(),
-        ExpressionNode::Function(node) => {
+        ExpressionNode::Binding(node) => {
+            // TODO: Can we do this better?
+            if node.arguments.is_empty() {
+                return mapping.get(expression).cloned();
+            }
+
             let args = node
                 .arguments
                 .iter()
                 .map(|arg| apply_mapping(arg, mapping))
                 .collect::<Option<Vec<ExpressionNode>>>()?;
 
-            let arg_types = args.iter().flat_map(|arg| arg.node_type().unwrap()).collect::<Vec<_>>();
+            let arg_types = args
+                .iter()
+                .flat_map(|arg| arg.node_type().unwrap())
+                .collect::<Vec<_>>();
             let mut func_type = arg_types.clone();
             func_type.extend(node.clone().node_type.unwrap().iter().cloned());
 
-            let expr = ExpressionNode::Variable(VariableNode::with_type(
+            let expr = ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, node.name.value()),
+                vec![],
                 func_type,
             ));
 
@@ -141,9 +150,10 @@ fn apply_mapping(
             function_node.name = mapping
                 .get(&expr)
                 .cloned()
-                .unwrap_or(ExpressionNode::Function(function_node.clone())).token();
+                .unwrap_or(ExpressionNode::Binding(function_node.clone()))
+                .token();
 
-            Some(ExpressionNode::Function(function_node))
+            Some(ExpressionNode::Binding(function_node))
         }
         ExpressionNode::Operator(node) => {
             let left = apply_mapping(&node.left, mapping)?;
@@ -192,12 +202,12 @@ fn substitute_builtin_helper(
                         Token::with_value(TokenKind::Number, (value - 1).to_string()),
                         TYPE_N,
                     );
-                    let function = FunctionNode::with_type(
+                    let function = BindingNode::with_type(
                         Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
                         vec![ExpressionNode::Number(number.clone())],
                         vec![TYPE_N],
                     );
-                    let substitution = ExpressionNode::Function(function);
+                    let substitution = ExpressionNode::Binding(function);
 
                     let implication = ImplicationNode::new(
                         vec![],
@@ -216,8 +226,12 @@ fn substitute_builtin_helper(
             }
         }
         ExpressionNode::Literal(_) => {}
-        ExpressionNode::Variable(_) => {}
-        ExpressionNode::Function(expr_node) => {
+        ExpressionNode::Binding(expr_node) => {
+            if expr_node.arguments.is_empty() {
+                // If the expression is a binding without arguments, we can skip it
+                return;
+            }
+
             match expr_node.name.value().as_ref() {
                 FUNCTION_N => {
                     if let ExpressionNode::Number(number_node) =
@@ -327,7 +341,7 @@ fn substitute_builtin_helper(
                 let arg_substitutions = substitute_builtin(arg);
                 for (substituted, impl_node) in arg_substitutions {
                     new_expr.arguments[i] = substituted;
-                    substitutions.push((ExpressionNode::Function(new_expr.clone()), impl_node));
+                    substitutions.push((ExpressionNode::Binding(new_expr.clone()), impl_node));
                 }
             }
         }
@@ -423,23 +437,14 @@ impl Solver {
                     }
                 }
             }
-            ExpressionNode::Variable(_) => {
-                if let Some(mapping) = create_mapping(expression, &relation.left) {
-                    if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
-                        if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
-                            substitutions.push((substituted, steps));
-                        }
-                    }
-                }
-            }
-            ExpressionNode::Function(node) => {
+            ExpressionNode::Binding(node) => {
                 for (i, arg) in node.arguments.iter().enumerate() {
                     let arg_substitutions = self.substitute(arg, implication);
 
                     for (substituted, steps) in arg_substitutions {
                         let mut new_expr = node.clone();
                         new_expr.arguments[i] = substituted;
-                        substitutions.push((ExpressionNode::Function(new_expr.clone()), steps));
+                        substitutions.push((ExpressionNode::Binding(new_expr.clone()), steps));
                     }
                 }
 

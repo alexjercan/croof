@@ -124,8 +124,10 @@ impl NumberNode {
         }
     }
 
-    pub fn with_type<S>(value: Token, node_type: S) -> Self where
-        S: Into<String>, {
+    pub fn with_type<S>(value: Token, node_type: S) -> Self
+    where
+        S: Into<String>,
+    {
         NumberNode {
             value,
             node_type: Some(vec![node_type.into()]),
@@ -135,10 +137,12 @@ impl NumberNode {
 
 impl Display for NumberNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.node_type {
-            Some(node_type) => write!(f, "{} : {}", self.value.value(), node_type.join(" -> ")),
-            None => write!(f, "{}", self.value.value()),
-        }
+        // match &self.node_type {
+        //     Some(node_type) => write!(f, "{} : {}", self.value.value(), node_type.join(" -> ")),
+        //     None => write!(f, "{}", self.value.value()),
+        // }
+
+        write!(f, "{}", self.value.value())
     }
 }
 
@@ -156,7 +160,10 @@ impl LiteralNode {
         }
     }
 
-    pub fn with_type<S>(value: Token, type_node: S) -> Self where S: Into<String> {
+    pub fn with_type<S>(value: Token, type_node: S) -> Self
+    where
+        S: Into<String>,
+    {
         LiteralNode {
             value,
             node_type: Some(vec![type_node.into()]),
@@ -166,54 +173,25 @@ impl LiteralNode {
 
 impl Display for LiteralNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.node_type {
-            Some(node_type) => write!(f, "\"{}\" : {}", self.value.value(), node_type.join(" -> ")),
-            None => write!(f, "\"{}\"", self.value.value()),
-        }
+        // match &self.node_type {
+        //     Some(node_type) => write!(f, "\"{}\" : {}", self.value.value(), node_type.join(" -> ")),
+        //     None => write!(f, "\"{}\"", self.value.value()),
+        // }
+
+        write!(f, "\"{}\"", self.value.value())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct VariableNode {
-    pub name: Token,
-    pub node_type: Option<Vec<String>>,
-}
-
-impl VariableNode {
-    pub fn new(name: Token) -> Self {
-        VariableNode {
-            name,
-            node_type: None,
-        }
-    }
-
-    pub fn with_type<S>(name: Token, node_type: Vec<S>) -> Self where S: Into<String> {
-        VariableNode {
-            name,
-            node_type: Some(node_type.into_iter().map(Into::into).collect()),
-        }
-    }
-}
-
-impl Display for VariableNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.node_type {
-            Some(node_type) => write!(f, "{} : {}", self.name.value(), node_type.join(" -> ")),
-            None => write!(f, "{}", self.name.value()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FunctionNode {
+pub struct BindingNode {
     pub name: Token,
     pub arguments: Vec<ExpressionNode>,
     pub node_type: Option<Vec<String>>,
 }
 
-impl FunctionNode {
+impl BindingNode {
     pub fn new(name: Token, arguments: Vec<ExpressionNode>) -> Self {
-        FunctionNode {
+        BindingNode {
             name,
             arguments,
             node_type: None,
@@ -221,8 +199,10 @@ impl FunctionNode {
     }
 
     pub fn with_type<S>(name: Token, arguments: Vec<ExpressionNode>, node_type: Vec<S>) -> Self
-    where S: Into<String> {
-        FunctionNode {
+    where
+        S: Into<String>,
+    {
+        BindingNode {
             name,
             arguments,
             node_type: Some(node_type.into_iter().map(Into::into).collect()),
@@ -230,19 +210,21 @@ impl FunctionNode {
     }
 }
 
-impl Display for FunctionNode {
+impl Display for BindingNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let args: Vec<String> = self.arguments.iter().map(|e| e.to_string()).collect();
-        match &self.node_type {
-            Some(node_type) => write!(
-                f,
-                "{}({}) : {}",
-                self.name.value(),
-                args.join(", "),
-                node_type.join(" -> ")
-            ),
-            None => write!(f, "{}({})", self.name.value(), args.join(", ")),
+
+        write!(f, "{}", self.name.value())?;
+        if !args.is_empty() {
+            write!(f, "({})", args.join(", "))?;
         }
+
+        // match &self.node_type {
+        //     Some(node_type) => write!(f, " : {}", node_type.join(" -> ")),
+        //     None => Ok(()),
+        // }
+
+        Ok(())
     }
 }
 
@@ -269,7 +251,10 @@ impl OperatorNode {
         left: ExpressionNode,
         right: ExpressionNode,
         node_type: Vec<S>,
-    ) -> Self where S: Into<String> {
+    ) -> Self
+    where
+        S: Into<String>,
+    {
         OperatorNode {
             operator,
             left: Box::new(left),
@@ -281,14 +266,16 @@ impl OperatorNode {
 
 impl Display for OperatorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.node_type {
-            Some(node_type) => write!(
-                f,
-                "{} {} {} : {}",
-                self.left, self.operator.value(), self.right, node_type.join(" -> ")
-            ),
-            None => write!(f, "{} {} {}", self.left, self.operator.value(), self.right),
-        }
+        // match &self.node_type {
+        //     Some(node_type) => write!(
+        //         f,
+        //         "{} {} {} : {}",
+        //         self.left, self.operator.value(), self.right, node_type.join(" -> ")
+        //     ),
+        //     None => write!(f, "{} {} {}", self.left, self.operator.value(), self.right),
+        // }
+
+        write!(f, "{} {} {}", self.left, self.operator.value(), self.right)
     }
 }
 
@@ -306,7 +293,10 @@ impl ParenNode {
         }
     }
 
-    pub fn with_type<S>(expression: ExpressionNode, node_type: Vec<S>) -> Self where S: Into<String> {
+    pub fn with_type<S>(expression: ExpressionNode, node_type: Vec<S>) -> Self
+    where
+        S: Into<String>,
+    {
         ParenNode {
             expression: Box::new(expression),
             node_type: Some(node_type.into_iter().map(Into::into).collect()),
@@ -316,14 +306,16 @@ impl ParenNode {
 
 impl Display for ParenNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.node_type {
-            Some(node_type) => write!(
-                f,
-                "({}) : {}",
-                self.expression, node_type.join(" -> ")
-            ),
-            None => write!(f, "({})", self.expression),
-        }
+        // match &self.node_type {
+        //     Some(node_type) => write!(
+        //         f,
+        //         "({}) : {}",
+        //         self.expression, node_type.join(" -> ")
+        //     ),
+        //     None => write!(f, "({})", self.expression),
+        // }
+
+        write!(f, "({})", self.expression)
     }
 }
 
@@ -333,8 +325,7 @@ pub enum ExpressionNode {
     Type(TypeNode),
     Number(NumberNode),
     Literal(LiteralNode),
-    Variable(VariableNode),
-    Function(FunctionNode),
+    Binding(BindingNode),
     Operator(OperatorNode),
     Paren(ParenNode),
 }
@@ -348,13 +339,8 @@ impl ExpressionNode {
             ExpressionNode::Type(_) => 0,
             ExpressionNode::Number(_) => 0,
             ExpressionNode::Literal(_) => 0,
-            ExpressionNode::Variable(_) => 1,
-            ExpressionNode::Function(function_node) => {
-                1 + function_node
-                    .arguments
-                    .iter()
-                    .map(|e| e.degree())
-                    .sum::<u64>()
+            ExpressionNode::Binding(node) => {
+                1 + node.arguments.iter().map(|e| e.degree()).sum::<u64>()
             }
             ExpressionNode::Operator(operator_node) => {
                 1 + operator_node.left.degree() + operator_node.right.degree()
@@ -369,8 +355,7 @@ impl ExpressionNode {
             ExpressionNode::Type(_) => todo!(),
             ExpressionNode::Number(node) => node.value.clone(),
             ExpressionNode::Literal(node) => node.value.clone(),
-            ExpressionNode::Variable(node) => node.name.clone(),
-            ExpressionNode::Function(node) => node.name.clone(),
+            ExpressionNode::Binding(node) => node.name.clone(),
             ExpressionNode::Operator(node) => node.operator.clone(),
             ExpressionNode::Paren(node) => node.expression.token(),
         }
@@ -382,8 +367,7 @@ impl ExpressionNode {
             ExpressionNode::Type(_) => todo!(),
             ExpressionNode::Number(node) => node.node_type.clone(),
             ExpressionNode::Literal(node) => node.node_type.clone(),
-            ExpressionNode::Variable(node) => node.node_type.clone(),
-            ExpressionNode::Function(node) => node.node_type.clone(),
+            ExpressionNode::Binding(node) => node.node_type.clone(),
             ExpressionNode::Operator(node) => node.node_type.clone(),
             ExpressionNode::Paren(node) => node.node_type.clone(),
         }
@@ -397,14 +381,13 @@ impl ExpressionNode {
 impl Display for ExpressionNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExpressionNode::Set(set_node) => write!(f, "{}", set_node),
-            ExpressionNode::Type(type_node) => write!(f, "{}", type_node),
-            ExpressionNode::Number(number_node) => write!(f, "{}", number_node),
-            ExpressionNode::Literal(literal_node) => write!(f, "{}", literal_node),
-            ExpressionNode::Variable(variable_node) => write!(f, "{}", variable_node),
-            ExpressionNode::Function(function_node) => write!(f, "{}", function_node),
-            ExpressionNode::Operator(operator_node) => write!(f, "{}", operator_node),
-            ExpressionNode::Paren(paren_node) => write!(f, "{}", paren_node),
+            ExpressionNode::Set(node) => write!(f, "{}", node),
+            ExpressionNode::Type(node) => write!(f, "{}", node),
+            ExpressionNode::Number(node) => write!(f, "{}", node),
+            ExpressionNode::Literal(node) => write!(f, "{}", node),
+            ExpressionNode::Binding(node) => write!(f, "{}", node),
+            ExpressionNode::Operator(node) => write!(f, "{}", node),
+            ExpressionNode::Paren(node) => write!(f, "{}", node),
         }
     }
 }
@@ -807,7 +790,7 @@ impl Parser {
                 let name = self.token.clone();
                 self.read();
 
-                match self.token.kind {
+                let args = match self.token.kind {
                     TokenKind::LParen => {
                         self.read();
 
@@ -829,11 +812,12 @@ impl Parser {
                                 )));
                             }
                         }
-
-                        ExpressionNode::Function(FunctionNode::new(name, arguments))
+                        arguments
                     }
-                    _ => ExpressionNode::Variable(VariableNode::new(name)),
-                }
+                    _ => vec![],
+                };
+
+                ExpressionNode::Binding(BindingNode::new(name, args))
             }
             TokenKind::LParen => {
                 self.read();
