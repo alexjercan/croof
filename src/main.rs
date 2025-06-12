@@ -78,6 +78,7 @@ fn main() -> ExitCode {
     }
 
     if args.typecheck {
+        println!("{}", ast);
         return ExitCode::SUCCESS;
     }
 

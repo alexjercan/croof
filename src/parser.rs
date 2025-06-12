@@ -135,7 +135,10 @@ impl NumberNode {
 
 impl Display for NumberNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value.value())
+        match &self.node_type {
+            Some(node_type) => write!(f, "{} : {}", self.value.value(), node_type.join(" -> ")),
+            None => write!(f, "{}", self.value.value()),
+        }
     }
 }
 
@@ -163,8 +166,10 @@ impl LiteralNode {
 
 impl Display for LiteralNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO: just for visuals maybe escape the string
-        write!(f, "\"{}\"", self.value.value())
+        match &self.node_type {
+            Some(node_type) => write!(f, "\"{}\" : {}", self.value.value(), node_type.join(" -> ")),
+            None => write!(f, "\"{}\"", self.value.value()),
+        }
     }
 }
 
@@ -192,7 +197,10 @@ impl VariableNode {
 
 impl Display for VariableNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name.value())
+        match &self.node_type {
+            Some(node_type) => write!(f, "{} : {}", self.name.value(), node_type.join(" -> ")),
+            None => write!(f, "{}", self.name.value()),
+        }
     }
 }
 
@@ -225,7 +233,16 @@ impl FunctionNode {
 impl Display for FunctionNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let args: Vec<String> = self.arguments.iter().map(|e| e.to_string()).collect();
-        write!(f, "{}({})", self.name.value(), args.join(", "))
+        match &self.node_type {
+            Some(node_type) => write!(
+                f,
+                "{}({}) : {}",
+                self.name.value(),
+                args.join(", "),
+                node_type.join(" -> ")
+            ),
+            None => write!(f, "{}({})", self.name.value(), args.join(", ")),
+        }
     }
 }
 
@@ -264,7 +281,14 @@ impl OperatorNode {
 
 impl Display for OperatorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} {}", self.left, self.operator.value(), self.right)
+        match &self.node_type {
+            Some(node_type) => write!(
+                f,
+                "{} {} {} : {}",
+                self.left, self.operator.value(), self.right, node_type.join(" -> ")
+            ),
+            None => write!(f, "{} {} {}", self.left, self.operator.value(), self.right),
+        }
     }
 }
 
@@ -292,7 +316,14 @@ impl ParenNode {
 
 impl Display for ParenNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({})", self.expression)
+        match &self.node_type {
+            Some(node_type) => write!(
+                f,
+                "({}) : {}",
+                self.expression, node_type.join(" -> ")
+            ),
+            None => write!(f, "({})", self.expression),
+        }
     }
 }
 
