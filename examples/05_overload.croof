@@ -1,0 +1,14 @@
+def Abc = { "a", "b", "c" }
+
+def ^ : Abc -> Abc -> Bool
+
+"a" ^ "b" = "true"
+"b" ^ "c" = "true"
+"c" ^ "a" = "true"
+"a" ^ "c" = "false"
+# ...
+
+eval "a" ^ "c"
+eval "a" ^ "b"
+
+eval ("a" ^ "b") ^ ("a" ^ "c")

@@ -278,7 +278,7 @@ fn substitute_builtin_helper(
 
                             substitutions.push((substitution.clone(), implication));
                         }
-                        _ => {},
+                        _ => {}
                     }
                 }
                 _ => todo!(),

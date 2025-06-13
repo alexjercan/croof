@@ -26,6 +26,35 @@ forall a : N => a ^ 0 = 1 # Identity for Exponentiation
 forall a : N => a ^ 1 = a # Identity for Exponentiation with 1
 forall a : N, forall b : N => a ^ succ(b) = (a ^ b) * a # Successor Property for Exponentiation
 
+# Integer Definitions
+
+forall a : Z => (a) = a # Identity
+
+def abs : Z -> Z
+abs(0) = neg(0)
+forall a : Z, neg(0) > a => abs(a) = neg(a)
+forall a : Z, a > neg(0) => abs(a) = a
+
+def + : Z -> Z -> Z # Addition on Z Numbers
+
+forall a : Z               => 0 + a = a
+forall a : Z, forall b : Z => succ(a) + b = a + succ(b)
+forall a : Z, forall b : Z => neg(succ(a)) + succ(b) = neg(a) + b
+
+forall a : Z, forall b : Z => a + b = b + a
+forall a : Z, forall b : Z, forall c : Z => (a + b) + c = a + (b + c)
+
+def * : Z -> Z -> Z # Multiplication on Z Numbers
+
+forall a : Z               => 0 * a = neg(0)
+forall a : Z               => 1 * a = a
+forall a : Z, forall b : Z => succ(a) * b = (a * b) + b
+forall a : Z, forall b : Z => neg(a) * b = neg(a * b)
+
+forall a : Z, forall b : Z => a * b = b * a
+forall a : Z, forall b : Z, forall c : Z => (a * b) * c = a * (b * c)
+forall a : Z, forall b : Z, forall c : Z => a * (b + c) = (a * b) + (a * c)
+
 # Boolean Definitions
 def Bool = {"true", "false"}
 
@@ -44,6 +73,13 @@ def || : Bool -> Bool -> Bool
 "true" || "false" = "true"
 "false" || "true" = "true"
 "false" || "false" = "false"
+
+def ^ : Bool -> Bool -> Bool
+
+"true" ^ "true" = "false"
+"true" ^ "false" = "true"
+"false" ^ "true" = "true"
+"false" ^ "false" = "false"
 
 # Comparison Definitions
 def < : N -> N -> Bool

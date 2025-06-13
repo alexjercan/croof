@@ -1,0 +1,8 @@
+eval 0 + (-1)
+eval -2 + 1
+eval -1 * 1
+eval neg(2)
+
+eval 1 < 2
+
+eval abs(-2)

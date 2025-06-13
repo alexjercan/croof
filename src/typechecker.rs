@@ -3,8 +3,9 @@ use std::collections::{hash_map, HashMap};
 use crate::{
     lexer::{SourceMap, Token, TokenKind},
     parser::{
-        DefineFunctionNode, DefineNode, DefineSetNode, ExpressionNode, ImplicationNode,
-        OperatorNode, SetNode, StatementNode, TypeNode,
+        BindingNode, DefineFunctionNode, DefineNode, DefineSetNode, ExpressionNode,
+        ImplicationNode, OperatorNode, QuantifierNode, RelationNode, SetNode, StatementNode,
+        TypeNode,
     },
 };
 
@@ -229,20 +230,19 @@ impl Typechecker {
             .cloned()
             .unwrap_or(HashMap::new())
             .into_iter()
-            .filter_map(|(k, v)| {
-                if let DefineNode::Operator(node) = v {
-                    Some((
-                        k,
-                        node.type_node
-                            .types
-                            .iter()
-                            .skip(arg_types.len())
-                            .map(|token| token.value())
-                            .collect::<Vec<_>>(),
-                    ))
-                } else {
-                    None
-                }
+            .filter_map(|(k, v)| match v {
+                DefineNode::Function(node) => Some((k, node.type_node.types)),
+                DefineNode::Operator(node) => Some((k, node.type_node.types)),
+                DefineNode::Set(_) => None,
+            })
+            .map(|(k, v)| {
+                (
+                    k,
+                    v.iter()
+                        .skip(arg_types.len())
+                        .map(|token| token.value())
+                        .collect::<Vec<_>>(),
+                )
             })
             .collect();
 
@@ -339,6 +339,63 @@ impl Typechecker {
         (None, errors)
     }
 
+    fn check_binding(
+        &self,
+        node: &mut BindingNode,
+        symbols: &HashMap<String, TypeNode>,
+    ) -> (Option<Vec<String>>, Vec<TypecheckerError>) {
+        let name = node.name.value();
+        let mut errors = vec![];
+
+        let mut arg_types: Vec<String> = vec![];
+        for arg in node.arguments.iter_mut() {
+            let (arg_type, arg_errors) = self.check_expression(arg, symbols);
+            errors.extend(arg_errors);
+
+            if let Some(t) = arg_type {
+                arg_types.extend(t)
+            }
+        }
+
+        // TODO: Maybe we want to infer some binding and still return Some type
+        if !errors.is_empty() {
+            errors.push(TypecheckerError::UndefinedBinding {
+                token: node.name.clone(),
+                arg_types,
+            });
+
+            return (None, errors);
+        }
+
+        let overloads = self.overloads(&name, &arg_types, symbols);
+
+        if let Some(types) = overloads.get(&arg_types) {
+            node.node_type = Some(types.clone());
+            return (Some(types.clone()), errors);
+        }
+
+        // Try to relax from N to Z
+        for (input_types, overload) in overloads {
+            let mut can_use = true;
+
+            for (arg_type, input_type) in arg_types.iter().zip(input_types.iter()) {
+                can_use = can_use
+                    && ((arg_type == input_type) || (arg_type == TYPE_N && input_type == TYPE_Z));
+            }
+
+            if can_use {
+                node.node_type = Some(overload.clone());
+                return (Some(overload), errors);
+            }
+        }
+
+        errors.push(TypecheckerError::UndefinedBinding {
+            token: node.name.clone(),
+            arg_types,
+        });
+        (None, errors)
+    }
+
     pub fn check_expression(
         &self,
         expression: &mut ExpressionNode,
@@ -386,67 +443,8 @@ impl Typechecker {
                     )],
                 )
             }
-            ExpressionNode::Binding(node) => {
-                let mut errors = vec![];
-                let mut can_find = true;
-
-                let mut arg_types: Vec<String> = vec![];
-                for arg in node.arguments.iter_mut() {
-                    let (arg_type, arg_errors) = self.check_expression(arg, symbols);
-                    errors.extend(arg_errors);
-
-                    match arg_type {
-                        Some(t) => arg_types.extend(t),
-                        None => can_find = false,
-                    }
-                }
-
-                if !can_find {
-                    errors.push(TypecheckerError::UndefinedBinding {
-                        token: node.name.clone(),
-                        arg_types,
-                    });
-                    return (None, errors);
-                }
-
-                let name = node.name.value();
-                let Some(node_type) = symbols.get(&name).or(
-                    match self.defines.get(&name).and_then(|arg_map| {
-                        if arg_types.is_empty() {
-                            arg_map.get(&vec![]).or(arg_map
-                                .values()
-                                .collect::<Vec<_>>()
-                                .first()
-                                .cloned())
-                        } else {
-                            arg_map.get(&arg_types)
-                        }
-                    }) {
-                        Some(DefineNode::Function(node)) => Some(&node.type_node),
-                        _ => None,
-                    },
-                ) else {
-                    return (
-                        None,
-                        vec![TypecheckerError::UndefinedBinding {
-                            token: node.name.clone(),
-                            arg_types,
-                        }],
-                    );
-                };
-
-                let node_type = node_type
-                    .types
-                    .iter()
-                    .skip(arg_types.len())
-                    .map(|token| token.value())
-                    .collect::<Vec<_>>();
-
-                node.node_type = Some(node_type);
-
-                (node.node_type.clone(), errors)
-            }
-            ExpressionNode::Operator(operator_node) => self.check_operator(operator_node, symbols),
+            ExpressionNode::Binding(node) => self.check_binding(node, symbols),
+            ExpressionNode::Operator(node) => self.check_operator(node, symbols),
             ExpressionNode::Paren(paren_node) => {
                 let (type_node, paren_errors) =
                     self.check_expression(&mut paren_node.expression, symbols);
@@ -458,46 +456,63 @@ impl Typechecker {
         }
     }
 
+    fn check_relation(
+        &self,
+        node: &mut RelationNode,
+        symbols: &HashMap<String, TypeNode>,
+    ) -> Vec<TypecheckerError> {
+        let mut errors = vec![];
+
+        let (left_type, left_errors) = self.check_expression(&mut node.left, symbols);
+        errors.extend(left_errors);
+        let (right_type, right_errors) = self.check_expression(&mut node.right, symbols);
+        errors.extend(right_errors);
+
+        if let (Some(left_type), Some(right_type)) = (left_type, right_type) {
+            if left_type.len() != right_type.len()
+                || left_type.iter().zip(right_type.iter()).any(|(l, r)| l != r)
+            {
+                errors.push(TypecheckerError::RelationTypeMissmatch {
+                    relation: node.token.clone(),
+                    expected: left_type,
+                    found: right_type,
+                });
+            }
+        }
+
+        errors
+    }
+
+    fn check_quantifier(
+        &self,
+        node: &mut QuantifierNode,
+        symbols: &mut HashMap<String, TypeNode>,
+    ) -> Vec<TypecheckerError> {
+        let mut errors = vec![];
+
+        let symbol = node.symbol.clone();
+        let name = symbol.value();
+
+        if let hash_map::Entry::Vacant(e) = symbols.entry(name) {
+            e.insert(node.type_node.clone());
+        } else {
+            errors.push(TypecheckerError::RedefinedBinding(symbol.clone()));
+        }
+
+        errors
+    }
+
     fn check_statement(
         &self,
         statement: &mut StatementNode,
         symbols: &mut HashMap<String, TypeNode>,
     ) -> Vec<TypecheckerError> {
-        let mut errors = vec![];
-
         match statement {
             StatementNode::Quantifier(quantifier_node) => {
-                let symbol = quantifier_node.symbol.clone();
-                let name = symbol.value();
-                if let hash_map::Entry::Vacant(e) = symbols.entry(name) {
-                    e.insert(quantifier_node.type_node.clone());
-                } else {
-                    errors.push(TypecheckerError::RedefinedBinding(symbol.clone()));
-                }
+                self.check_quantifier(quantifier_node, symbols)
             }
-            StatementNode::Relation(relation_node) => {
-                let (left_type, left_errors) =
-                    self.check_expression(&mut relation_node.left, symbols);
-                errors.extend(left_errors);
-                let (right_type, right_errors) =
-                    self.check_expression(&mut relation_node.right, symbols);
-                errors.extend(right_errors);
-
-                if let (Some(left_type), Some(right_type)) = (left_type, right_type) {
-                    if left_type.len() != right_type.len()
-                        || left_type.iter().zip(right_type.iter()).any(|(l, r)| l != r)
-                    {
-                        errors.push(TypecheckerError::RelationTypeMissmatch {
-                            relation: relation_node.token.clone(),
-                            expected: left_type,
-                            found: right_type,
-                        });
-                    }
-                }
-            }
-        };
-
-        errors
+            StatementNode::Relation(relation_node) => self.check_relation(relation_node, symbols),
+        }
     }
 
     pub fn check(&self, implication: &mut ImplicationNode) -> Vec<TypecheckerError> {

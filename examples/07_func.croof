@@ -1,0 +1,5 @@
+def apply : N -> N -> N -> N
+
+forall a : N, forall f : N -> N => apply(f, a) = f(a)
+
+eval apply(succ, 0)
