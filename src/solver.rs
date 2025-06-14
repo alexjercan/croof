@@ -6,9 +6,10 @@ use std::{
 use crate::{
     lexer::{Token, TokenKind},
     parser::{
-        BindingNode, BuiltinNode, ExpressionNode, ImplicationNode, NumberNode, RelationKind, RelationNode, StatementNode
+        BindingNode, BuiltinNode, ExpressionNode, ImplicationNode, NumberNode, RelationKind,
+        RelationNode, StatementNode,
     },
-    typechecker::{can_infer_type, FUNCTION_NEG, FUNCTION_SUCC, TYPE_N, TYPE_Z},
+    typechecker::{FUNCTION_NEG, FUNCTION_SUCC, TYPE_N, TYPE_Z},
 };
 
 pub type ProofStep = (ExpressionNode, ExpressionNode, ImplicationNode);
@@ -43,72 +44,80 @@ fn builtin_implications() -> Vec<ImplicationNode> {
         // forall a : N => a = succ(a - 1)
         ImplicationNode::new(
             vec![],
-            vec![
-                StatementNode::Builtin(BuiltinNode::new(
-                    "forall a : N => a = succ(a - 1)",
-                    |expression| {
-                        if let ExpressionNode::Number(node) = expression {
-                            if let Some(TYPE_N) = node.node_type.as_ref().and_then(|t| t.first()).cloned().as_deref() {
-                                let value = node.value.value().parse::<u64>().ok()?;
-                                if value == 0 {
-                                    return None;
-                                }
-
-                                let number = NumberNode::with_type(
-                                    Token::with_value(TokenKind::Number, (value - 1).to_string()),
-                                    TYPE_N,
-                                );
-
-                                let function = BindingNode::with_type(
-                                    Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
-                                    vec![ExpressionNode::Number(number.clone())],
-                                    vec![TYPE_N],
-                                );
-                                let substitution = ExpressionNode::Binding(function);
-
-                                return Some(substitution);
+            vec![StatementNode::Builtin(BuiltinNode::new(
+                "forall a : N => a = succ(a - 1)",
+                |expression| {
+                    if let ExpressionNode::Number(node) = expression {
+                        if let Some(TYPE_N) = node
+                            .node_type
+                            .as_ref()
+                            .and_then(|t| t.first())
+                            .cloned()
+                            .as_deref()
+                        {
+                            let value = node.value.value().parse::<u64>().ok()?;
+                            if value == 0 {
+                                return None;
                             }
-                        }
 
-                        None
+                            let number = NumberNode::with_type(
+                                Token::with_value(TokenKind::Number, (value - 1).to_string()),
+                                TYPE_N,
+                            );
+
+                            let function = BindingNode::with_type(
+                                Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
+                                vec![ExpressionNode::Number(number.clone())],
+                                vec![TYPE_N],
+                            );
+                            let substitution = ExpressionNode::Binding(function);
+
+                            return Some(substitution);
+                        }
                     }
-                )),
-            ],
+
+                    None
+                },
+            ))],
         ),
         // forall a : Z => a = succ(a - 1)
         ImplicationNode::new(
             vec![],
-            vec![
-                StatementNode::Builtin(BuiltinNode::new(
-                    "forall a : Z => a = succ(a - 1)",
-                    |expression| {
-                        if let ExpressionNode::Number(node) = expression {
-                            if let Some(TYPE_Z) = node.node_type.as_ref().and_then(|t| t.first()).cloned().as_deref() {
-                                let value = node.value.value().parse::<i64>().ok()?;
-                                if value <= 0 {
-                                    return None;
-                                }
-
-                                let number = NumberNode::with_type(
-                                    Token::with_value(TokenKind::Number, (value - 1).to_string()),
-                                    TYPE_N,
-                                );
-
-                                let function = BindingNode::with_type(
-                                    Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
-                                    vec![ExpressionNode::Number(number.clone())],
-                                    vec![TYPE_N],
-                                );
-                                let substitution = ExpressionNode::Binding(function);
-
-                                return Some(substitution);
+            vec![StatementNode::Builtin(BuiltinNode::new(
+                "forall a : Z => a = succ(a - 1)",
+                |expression| {
+                    if let ExpressionNode::Number(node) = expression {
+                        if let Some(TYPE_Z) = node
+                            .node_type
+                            .as_ref()
+                            .and_then(|t| t.first())
+                            .cloned()
+                            .as_deref()
+                        {
+                            let value = node.value.value().parse::<i64>().ok()?;
+                            if value <= 0 {
+                                return None;
                             }
-                        }
 
-                        None
+                            let number = NumberNode::with_type(
+                                Token::with_value(TokenKind::Number, (value - 1).to_string()),
+                                TYPE_N,
+                            );
+
+                            let function = BindingNode::with_type(
+                                Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
+                                vec![ExpressionNode::Number(number.clone())],
+                                vec![TYPE_N],
+                            );
+                            let substitution = ExpressionNode::Binding(function);
+
+                            return Some(substitution);
+                        }
                     }
-                )),
-            ],
+
+                    None
+                },
+            ))],
         ),
         // forall a : Z, a > 0 => -a = neg(a)
         ImplicationNode::new(
@@ -117,7 +126,13 @@ fn builtin_implications() -> Vec<ImplicationNode> {
                 "forall a : Z, a > 0 => -a = neg(a)",
                 |expression| {
                     if let ExpressionNode::Number(node) = expression {
-                        if let Some(TYPE_Z) = node.node_type.as_ref().and_then(|t| t.first()).cloned().as_deref() {
+                        if let Some(TYPE_Z) = node
+                            .node_type
+                            .as_ref()
+                            .and_then(|t| t.first())
+                            .cloned()
+                            .as_deref()
+                        {
                             let value = node.value.value().parse::<i64>().ok()?;
                             if value > 0 {
                                 return None;
@@ -151,12 +166,22 @@ fn builtin_implications() -> Vec<ImplicationNode> {
                 "forall a : N => succ(a) = a + 1",
                 |expression| {
                     if let ExpressionNode::Binding(expr_node) = expression {
-                        if expr_node.name.value() == FUNCTION_SUCC && expr_node.arguments.len() == 1 {
+                        if expr_node.name.value() == FUNCTION_SUCC && expr_node.arguments.len() == 1
+                        {
                             if let ExpressionNode::Number(number_node) = &expr_node.arguments[0] {
-                                if let Some(TYPE_N) = number_node.node_type.as_ref().and_then(|t| t.first()).cloned().as_deref() {
+                                if let Some(TYPE_N) = number_node
+                                    .node_type
+                                    .as_ref()
+                                    .and_then(|t| t.first())
+                                    .cloned()
+                                    .as_deref()
+                                {
                                     let value = number_node.value.value().parse::<u64>().ok()?;
                                     let number = NumberNode::with_type(
-                                        Token::with_value(TokenKind::Number, (value + 1).to_string()),
+                                        Token::with_value(
+                                            TokenKind::Number,
+                                            (value + 1).to_string(),
+                                        ),
                                         TYPE_N,
                                     );
 
@@ -179,12 +204,22 @@ fn builtin_implications() -> Vec<ImplicationNode> {
                 "forall a : Z => succ(a) = a + 1",
                 |expression| {
                     if let ExpressionNode::Binding(expr_node) = expression {
-                        if expr_node.name.value() == FUNCTION_SUCC && expr_node.arguments.len() == 1 {
+                        if expr_node.name.value() == FUNCTION_SUCC && expr_node.arguments.len() == 1
+                        {
                             if let ExpressionNode::Number(number_node) = &expr_node.arguments[0] {
-                                if let Some(TYPE_Z) = number_node.node_type.as_ref().and_then(|t| t.first()).cloned().as_deref() {
+                                if let Some(TYPE_Z) = number_node
+                                    .node_type
+                                    .as_ref()
+                                    .and_then(|t| t.first())
+                                    .cloned()
+                                    .as_deref()
+                                {
                                     let value = number_node.value.value().parse::<i64>().ok()?;
                                     let number = NumberNode::with_type(
-                                        Token::with_value(TokenKind::Number, (value + 1).to_string()),
+                                        Token::with_value(
+                                            TokenKind::Number,
+                                            (value + 1).to_string(),
+                                        ),
                                         TYPE_Z,
                                     );
 
@@ -207,9 +242,16 @@ fn builtin_implications() -> Vec<ImplicationNode> {
                 "forall a : Z => neg(a) = -a",
                 |expression| {
                     if let ExpressionNode::Binding(expr_node) = expression {
-                        if expr_node.name.value() == FUNCTION_NEG && expr_node.arguments.len() == 1 {
+                        if expr_node.name.value() == FUNCTION_NEG && expr_node.arguments.len() == 1
+                        {
                             if let ExpressionNode::Number(number_node) = &expr_node.arguments[0] {
-                                if let Some(TYPE_Z) = number_node.node_type.as_ref().and_then(|t| t.first()).cloned().as_deref() {
+                                if let Some(TYPE_Z) = number_node
+                                    .node_type
+                                    .as_ref()
+                                    .and_then(|t| t.first())
+                                    .cloned()
+                                    .as_deref()
+                                {
                                     let value = number_node.value.value().parse::<i64>().ok()?;
 
                                     let number = NumberNode::with_type(
@@ -230,149 +272,6 @@ fn builtin_implications() -> Vec<ImplicationNode> {
             ))],
         ),
     ]
-}
-
-fn create_mapping_helper(
-    from: &ExpressionNode,
-    to: &ExpressionNode,
-    mapping: &mut HashMap<ExpressionNode, ExpressionNode>,
-) -> bool {
-    let Some(from_type) = from.node_type() else {
-        return false;
-    };
-    let Some(to_type) = to.node_type() else {
-        return false;
-    };
-    if !can_infer_type(&from_type, &to_type) {
-        return false;
-    }
-
-    match to {
-        ExpressionNode::Set(_) => todo!(),
-        ExpressionNode::Type(_) => todo!(),
-        ExpressionNode::Number(to_node) => match from {
-            ExpressionNode::Number(from_node) => to_node.value == from_node.value,
-            _ => false,
-        },
-        ExpressionNode::Literal(to_node) => match from {
-            ExpressionNode::Literal(from_node) => to_node.value == from_node.value,
-            _ => false,
-        },
-        ExpressionNode::Binding(to_node) => {
-            if to_node.arguments.is_empty() {
-                let has_mapping = mapping.contains_key(to);
-                let should_substitute = !has_mapping || mapping.get(to) == Some(from);
-
-                if !has_mapping {
-                    mapping.insert(to.clone(), from.clone());
-                }
-
-                return should_substitute;
-            }
-
-            match from {
-                ExpressionNode::Binding(from_node) => {
-                    to_node.name == from_node.name
-                        && to_node.arguments.len() == from_node.arguments.len()
-                        && to_node.arguments.iter().zip(&from_node.arguments).all(
-                            |(to_arg, from_arg)| create_mapping_helper(from_arg, to_arg, mapping),
-                        )
-                }
-                _ => false,
-            }
-        }
-        ExpressionNode::Operator(to_node) => match from {
-            ExpressionNode::Operator(operator_node) => {
-                to_node.operator == operator_node.operator
-                    && create_mapping_helper(&operator_node.left, &to_node.left, mapping)
-                    && create_mapping_helper(&operator_node.right, &to_node.right, mapping)
-            }
-            _ => false,
-        },
-        ExpressionNode::Paren(to_node) => match from {
-            ExpressionNode::Paren(paren_node) => {
-                create_mapping_helper(&paren_node.expression, &to_node.expression, mapping)
-            }
-            _ => false,
-        },
-    }
-}
-
-fn create_mapping(
-    from: &ExpressionNode,
-    to: &ExpressionNode,
-) -> Option<HashMap<ExpressionNode, ExpressionNode>> {
-    let mut mapping = HashMap::new();
-    if create_mapping_helper(from, to, &mut mapping) {
-        Some(mapping)
-    } else {
-        None
-    }
-}
-
-fn apply_mapping(
-    expression: &ExpressionNode,
-    mapping: &HashMap<ExpressionNode, ExpressionNode>,
-) -> Option<ExpressionNode> {
-    match expression {
-        ExpressionNode::Set(_) => todo!(),
-        ExpressionNode::Type(_) => todo!(),
-        ExpressionNode::Number(_) => Some(expression.clone()),
-        ExpressionNode::Literal(_) => Some(expression.clone()),
-        ExpressionNode::Binding(node) => {
-            // TODO: Can we do this better?
-            if node.arguments.is_empty() {
-                return mapping.get(expression).cloned();
-            }
-
-            let args = node
-                .arguments
-                .iter()
-                .map(|arg| apply_mapping(arg, mapping))
-                .collect::<Option<Vec<ExpressionNode>>>()?;
-
-            let mut func_type = args
-                .iter()
-                .filter_map(|arg| arg.node_type())
-                .flatten()
-                .collect::<Vec<String>>();
-            let return_type = node.clone().node_type?;
-            func_type.extend(return_type.iter().cloned());
-
-            let expr = ExpressionNode::Binding(BindingNode::with_type(
-                Token::with_value(TokenKind::Identifier, node.name.value()),
-                vec![],
-                func_type,
-            ));
-
-            let mut function_node = node.clone();
-            function_node.arguments = args;
-            function_node.name = mapping
-                .get(&expr)
-                .cloned()
-                .unwrap_or(ExpressionNode::Binding(function_node.clone()))
-                .token();
-
-            Some(ExpressionNode::Binding(function_node))
-        }
-        ExpressionNode::Operator(node) => {
-            let left = apply_mapping(&node.left, mapping)?;
-            let right = apply_mapping(&node.right, mapping)?;
-
-            let mut operator_node = node.clone();
-            operator_node.left = Box::new(left);
-            operator_node.right = Box::new(right);
-
-            Some(ExpressionNode::Operator(operator_node))
-        }
-        ExpressionNode::Paren(node) => {
-            let expr = apply_mapping(&node.expression, mapping)?;
-            let mut paren_node = node.clone();
-            paren_node.expression = Box::new(expr);
-
-            Some(ExpressionNode::Paren(paren_node))
-        }
-    }
 }
 
 fn trace_steps(
@@ -405,190 +304,61 @@ impl Solver {
         Solver { implications }
     }
 
-    fn substitute_helper_relation(
-        &self,
-        expression: &ExpressionNode,
-        implication: &ImplicationNode,
-        substitutions: &mut Vec<(ExpressionNode, Vec<ProofStep>)>,
-    ) {
-        let StatementNode::Relation(relation) = &implication.conclusion[0] else {
-            unreachable!();
-        };
-
-        match expression {
-            ExpressionNode::Set(_) => todo!(),
-            ExpressionNode::Type(_) => todo!(),
-            ExpressionNode::Number(_) => {
-                if let Some(mapping) = create_mapping(expression, &relation.left) {
-                    if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
-                        if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
-                            substitutions.push((substituted, steps));
-                        }
-                    }
-                }
-            }
-            ExpressionNode::Literal(_) => {
-                if let Some(mapping) = create_mapping(expression, &relation.left) {
-                    if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
-                        if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
-                            substitutions.push((substituted, steps));
-                        }
-                    }
-                }
-            }
-            ExpressionNode::Binding(node) => {
-                for (i, arg) in node.arguments.iter().enumerate() {
-                    let arg_substitutions = self.substitute(arg, implication);
-
-                    for (substituted, steps) in arg_substitutions {
-                        let mut new_expr = node.clone();
-                        new_expr.arguments[i] = substituted;
-                        substitutions.push((ExpressionNode::Binding(new_expr.clone()), steps));
-                    }
-                }
-
-                if let Some(mapping) = create_mapping(expression, &relation.left) {
-                    if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
-                        if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
-                            substitutions.push((substituted, steps));
-                        }
-                    }
-                }
-            }
-            ExpressionNode::Operator(node) => {
-                let left_substitutions = self.substitute(&node.left, implication);
-                for (left_substituted, left_steps) in left_substitutions {
-                    let mut new_expr = node.clone();
-                    *new_expr.left = left_substituted;
-                    substitutions.push((ExpressionNode::Operator(new_expr.clone()), left_steps));
-                }
-
-                let right_substitutions = self.substitute(&node.right, implication);
-                for (right_substituted, right_steps) in right_substitutions {
-                    let mut new_expr = node.clone();
-                    *new_expr.right = right_substituted;
-                    substitutions.push((ExpressionNode::Operator(new_expr.clone()), right_steps));
-                }
-
-                if let Some(mapping) = create_mapping(expression, &relation.left) {
-                    if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
-                        if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
-                            substitutions.push((substituted, steps));
-                        }
-                    }
-                }
-            }
-            ExpressionNode::Paren(node) => {
-                let expr_substitutions = self.substitute(&node.expression, implication);
-                for (substituted, steps) in expr_substitutions {
-                    let mut new_expr = node.clone();
-                    new_expr.expression = Box::new(substituted);
-                    substitutions.push((ExpressionNode::Paren(new_expr), steps));
-                }
-
-                if let Some(mapping) = create_mapping(expression, &relation.left) {
-                    if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
-                        if let Some(substituted) = apply_mapping(&relation.right, &mapping) {
-                            substitutions.push((substituted, steps));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn substitute_helper_builtin(
-        &self,
-        expression: &ExpressionNode,
-        implication: &ImplicationNode,
-        substitutions: &mut Vec<(ExpressionNode, Vec<ProofStep>)>,
-    ) {
-        let StatementNode::Builtin(builtin) = &implication.conclusion[0] else {
-            unreachable!();
-        };
-
-        match expression {
-            ExpressionNode::Set(_) => todo!(),
-            ExpressionNode::Type(_) => todo!(),
-            ExpressionNode::Number(node) => {
-                if let Some(substitution) = builtin.apply(&ExpressionNode::Number(node.clone())) {
-                    if let Ok(steps) = self.proof_all(&implication.conditions, &HashMap::new()) {
-                        substitutions.push((substitution, steps));
-                    }
-                }
-            },
-            ExpressionNode::Literal(node) => {
-                if let Some(substitution) = builtin.apply(&ExpressionNode::Literal(node.clone())) {
-                    if let Ok(steps) = self.proof_all(&implication.conditions, &HashMap::new()) {
-                        substitutions.push((substitution, steps));
-                    }
-                }
-            },
-            ExpressionNode::Binding(node) => {
-                for (i, arg) in node.arguments.iter().enumerate() {
-                    let arg_substitutions = self.substitute(arg, implication);
-
-                    for (substituted, steps) in arg_substitutions {
-                        let mut new_expr = node.clone();
-                        new_expr.arguments[i] = substituted;
-                        substitutions.push((ExpressionNode::Binding(new_expr.clone()), steps));
-                    }
-                }
-
-                if let Some(substitution) = builtin.apply(expression) {
-                    if let Ok(steps) = self.proof_all(&implication.conditions, &HashMap::new()) {
-                        substitutions.push((substitution, steps));
-                    }
-                }
-            },
-            ExpressionNode::Operator(node) => {
-                let left_substitutions = self.substitute(&node.left, implication);
-                for (left_substituted, left_steps) in left_substitutions {
-                    let mut new_expr = node.clone();
-                    *new_expr.left = left_substituted;
-                    substitutions.push((ExpressionNode::Operator(new_expr.clone()), left_steps));
-                }
-
-                let right_substitutions = self.substitute(&node.right, implication);
-                for (right_substituted, right_steps) in right_substitutions {
-                    let mut new_expr = node.clone();
-                    *new_expr.right = right_substituted;
-                    substitutions.push((ExpressionNode::Operator(new_expr.clone()), right_steps));
-                }
-
-                if let Some(substitution) = builtin.apply(expression) {
-                    if let Ok(steps) = self.proof_all(&implication.conditions, &HashMap::new()) {
-                        substitutions.push((substitution, steps));
-                    }
-                }
-            },
-            ExpressionNode::Paren(node) => {
-                let expr_substitutions = self.substitute(&node.expression, implication);
-                for (substituted, steps) in expr_substitutions {
-                    let mut new_expr = node.clone();
-                    new_expr.expression = Box::new(substituted);
-                    substitutions.push((ExpressionNode::Paren(new_expr), steps));
-                }
-
-                if let Some(substitution) = builtin.apply(expression) {
-                    if let Ok(steps) = self.proof_all(&implication.conditions, &HashMap::new()) {
-                        substitutions.push((substitution, steps));
-                    }
-                }
-            },
-        }
-    }
-
     fn substitute_helper(
         &self,
         expression: &ExpressionNode,
         implication: &ImplicationNode,
         substitutions: &mut Vec<(ExpressionNode, Vec<ProofStep>)>,
     ) {
-        match &implication.conclusion[0] {
-            StatementNode::Relation(_) => self.substitute_helper_relation(expression, implication, substitutions),
-            StatementNode::Builtin(_) => self.substitute_helper_builtin(expression, implication, substitutions),
-            _ => todo!("Only relation and builtin conclusions are supported for now"),
+        let statement = &implication.conclusion[0];
+
+        match expression {
+            ExpressionNode::Set(_) => todo!(),
+            ExpressionNode::Type(_) => todo!(),
+            ExpressionNode::Number(_) => {}
+            ExpressionNode::Literal(_) => {}
+            ExpressionNode::Binding(node) => {
+                for (i, arg) in node.arguments.iter().enumerate() {
+                    let arg_substitutions = self.substitute(arg, implication);
+
+                    for (substituted, steps) in arg_substitutions {
+                        let mut new_expr = node.clone();
+                        new_expr.arguments[i] = substituted;
+                        substitutions.push((ExpressionNode::Binding(new_expr.clone()), steps));
+                    }
+                }
+            }
+            ExpressionNode::Operator(node) => {
+                let left_substitutions = self.substitute(&node.left, implication);
+                for (left_substituted, left_steps) in left_substitutions {
+                    let mut new_expr = node.clone();
+                    *new_expr.left = left_substituted;
+                    substitutions.push((ExpressionNode::Operator(new_expr.clone()), left_steps));
+                }
+
+                let right_substitutions = self.substitute(&node.right, implication);
+                for (right_substituted, right_steps) in right_substitutions {
+                    let mut new_expr = node.clone();
+                    *new_expr.right = right_substituted;
+                    substitutions.push((ExpressionNode::Operator(new_expr.clone()), right_steps));
+                }
+            }
+            ExpressionNode::Paren(node) => {
+                let expr_substitutions = self.substitute(&node.expression, implication);
+                for (substituted, steps) in expr_substitutions {
+                    let mut new_expr = node.clone();
+                    new_expr.expression = Box::new(substituted);
+                    substitutions.push((ExpressionNode::Paren(new_expr), steps));
+                }
+            }
+        }
+
+        if let Some(mapping) = statement.create_mapping(expression) {
+            if let Ok(steps) = self.proof_all(&implication.conditions, &mapping) {
+                if let Some(substituted) = statement.apply(expression, &mapping) {
+                    substitutions.push((substituted, steps));
+                }
+            }
         }
     }
 
@@ -702,8 +472,8 @@ impl Solver {
 
         for condition in conditions {
             if let StatementNode::Relation(relation) = condition {
-                let left = apply_mapping(&relation.left, mapping);
-                let right = apply_mapping(&relation.right, mapping);
+                let left = relation.left.apply(mapping);
+                let right = relation.right.apply(mapping);
 
                 match (left, right) {
                     (Some(left), Some(right)) => {
@@ -767,13 +537,17 @@ mod test {
     #[test]
     fn test_create_mapping_number_number() {
         // Arrange
-        let from =
-            ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42")));
-        let to =
-            ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42")));
+        let from = ExpressionNode::Number(NumberNode::with_type(
+            Token::with_value(TokenKind::Number, "42"),
+            TYPE_N,
+        ));
+        let to = ExpressionNode::Number(NumberNode::with_type(
+            Token::with_value(TokenKind::Number, "42"),
+            TYPE_N,
+        ));
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_some());
@@ -792,7 +566,7 @@ mod test {
             ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42")));
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_none());
@@ -812,7 +586,7 @@ mod test {
             ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42")));
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_none());
@@ -821,22 +595,29 @@ mod test {
     #[test]
     fn test_create_mapping_number_variable() {
         // Arrange
-        let from =
-            ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42")));
-        let to = ExpressionNode::Binding(BindingNode::new(
+        let from = ExpressionNode::Number(NumberNode::with_type(
+            Token::with_value(TokenKind::Number, "42"),
+            TYPE_N,
+        ));
+        let to = ExpressionNode::Binding(BindingNode::with_type(
             Token::with_value(TokenKind::Identifier, "x"),
             vec![],
+            vec![TYPE_N],
         ));
         let expected = HashMap::from([(
-            ExpressionNode::Binding(BindingNode::new(
+            ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, "x"),
                 vec![],
+                vec![TYPE_N],
             )),
-            ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42"))),
+            ExpressionNode::Number(NumberNode::with_type(
+                Token::with_value(TokenKind::Number, "42"),
+                TYPE_N,
+            )),
         )]);
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_some());
@@ -847,27 +628,31 @@ mod test {
     #[test]
     fn test_create_mapping_variable_variable() {
         // Arrange
-        let from = ExpressionNode::Binding(BindingNode::new(
+        let from = ExpressionNode::Binding(BindingNode::with_type(
             Token::with_value(TokenKind::Identifier, "x"),
             vec![],
+            vec![TYPE_N],
         ));
-        let to = ExpressionNode::Binding(BindingNode::new(
+        let to = ExpressionNode::Binding(BindingNode::with_type(
             Token::with_value(TokenKind::Identifier, "y"),
             vec![],
+            vec![TYPE_N],
         ));
         let expected = HashMap::from([(
-            ExpressionNode::Binding(BindingNode::new(
+            ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, "y"),
                 vec![],
+                vec![TYPE_N],
             )),
-            ExpressionNode::Binding(BindingNode::new(
+            ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, "x"),
                 vec![],
+                vec![TYPE_N],
             )),
         )]);
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_some());
@@ -878,33 +663,37 @@ mod test {
     #[test]
     fn test_create_mapping_function_variable() {
         // Arrange
-        let from = ExpressionNode::Binding(BindingNode::new(
+        let from = ExpressionNode::Binding(BindingNode::with_type(
             Token::with_value(TokenKind::Identifier, "f"),
             vec![ExpressionNode::Number(NumberNode::new(Token::with_value(
                 TokenKind::Number,
                 "42",
             )))],
+            vec![TYPE_N],
         ));
-        let to = ExpressionNode::Binding(BindingNode::new(
+        let to = ExpressionNode::Binding(BindingNode::with_type(
             Token::with_value(TokenKind::Identifier, "x"),
             vec![],
+            vec![TYPE_N],
         ));
         let expected = HashMap::from([(
-            ExpressionNode::Binding(BindingNode::new(
+            ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, "x"),
                 vec![],
+                vec![TYPE_N],
             )),
-            ExpressionNode::Binding(BindingNode::new(
+            ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, "f"),
                 vec![ExpressionNode::Number(NumberNode::new(Token::with_value(
                     TokenKind::Number,
                     "42",
                 )))],
+                vec![TYPE_N],
             )),
         )]);
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_some());
@@ -915,29 +704,45 @@ mod test {
     #[test]
     fn test_create_mapping_operator_variable() {
         // Arrange
-        let from = ExpressionNode::Operator(OperatorNode::new(
+        let from = ExpressionNode::Operator(OperatorNode::with_type(
             Token::with_value(TokenKind::Operator, "+"),
-            ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42"))),
-            ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "1"))),
+            ExpressionNode::Number(NumberNode::with_type(
+                Token::with_value(TokenKind::Number, "42"),
+                TYPE_N,
+            )),
+            ExpressionNode::Number(NumberNode::with_type(
+                Token::with_value(TokenKind::Number, "1"),
+                TYPE_N,
+            )),
+            vec![TYPE_N],
         ));
-        let to = ExpressionNode::Binding(BindingNode::new(
+        let to = ExpressionNode::Binding(BindingNode::with_type(
             Token::with_value(TokenKind::Identifier, "x"),
             vec![],
+            vec![TYPE_N],
         ));
         let expected = HashMap::from([(
-            ExpressionNode::Binding(BindingNode::new(
+            ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, "x"),
                 vec![],
+                vec![TYPE_N],
             )),
-            ExpressionNode::Operator(OperatorNode::new(
+            ExpressionNode::Operator(OperatorNode::with_type(
                 Token::with_value(TokenKind::Operator, "+"),
-                ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42"))),
-                ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "1"))),
+                ExpressionNode::Number(NumberNode::with_type(
+                    Token::with_value(TokenKind::Number, "42"),
+                    TYPE_N,
+                )),
+                ExpressionNode::Number(NumberNode::with_type(
+                    Token::with_value(TokenKind::Number, "1"),
+                    TYPE_N,
+                )),
+                vec![TYPE_N],
             )),
         )]);
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_some());
@@ -948,25 +753,35 @@ mod test {
     #[test]
     fn test_create_mapping_paren_variable() {
         // Arrange
-        let from = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(NumberNode::new(
-            Token::with_value(TokenKind::Number, "42"),
-        ))));
-        let to = ExpressionNode::Binding(BindingNode::new(
+        let from = ExpressionNode::Paren(ParenNode::with_type(
+            ExpressionNode::Number(NumberNode::with_type(
+                Token::with_value(TokenKind::Number, "42"),
+                TYPE_N,
+            )),
+            vec![TYPE_N],
+        ));
+        let to = ExpressionNode::Binding(BindingNode::with_type(
             Token::with_value(TokenKind::Identifier, "x"),
             vec![],
+            vec![TYPE_N],
         ));
         let expected = HashMap::from([(
-            ExpressionNode::Binding(BindingNode::new(
+            ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, "x"),
                 vec![],
+                vec![TYPE_N],
             )),
-            ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(NumberNode::new(
-                Token::with_value(TokenKind::Number, "42"),
-            )))),
+            ExpressionNode::Paren(ParenNode::with_type(
+                ExpressionNode::Number(NumberNode::with_type(
+                    Token::with_value(TokenKind::Number, "42"),
+                    TYPE_N,
+                )),
+                vec![TYPE_N],
+            )),
         )]);
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_some());
@@ -988,7 +803,7 @@ mod test {
         ));
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_none());
@@ -997,30 +812,37 @@ mod test {
     #[test]
     fn test_create_mapping_function_function() {
         // Arrange
-        let from = ExpressionNode::Binding(BindingNode::new(
+        let from = ExpressionNode::Binding(BindingNode::with_type(
             Token::with_value(TokenKind::Identifier, "f"),
-            vec![ExpressionNode::Number(NumberNode::new(Token::with_value(
-                TokenKind::Number,
-                "42",
-            )))],
+            vec![ExpressionNode::Number(NumberNode::with_type(
+                Token::with_value(TokenKind::Number, "42"),
+                TYPE_N,
+            ))],
+            vec![TYPE_N],
         ));
-        let to = ExpressionNode::Binding(BindingNode::new(
+        let to = ExpressionNode::Binding(BindingNode::with_type(
             Token::with_value(TokenKind::Identifier, "f"),
-            vec![ExpressionNode::Binding(BindingNode::new(
+            vec![ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, "x"),
                 vec![],
+                vec![TYPE_N],
             ))],
+            vec![TYPE_N],
         ));
         let expected = HashMap::from([(
-            ExpressionNode::Binding(BindingNode::new(
+            ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, "x"),
                 vec![],
+                vec![TYPE_N],
             )),
-            ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42"))),
+            ExpressionNode::Number(NumberNode::with_type(
+                Token::with_value(TokenKind::Number, "42"),
+                TYPE_N,
+            )),
         )]);
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_some());
@@ -1031,12 +853,13 @@ mod test {
     #[test]
     fn test_create_mapping_function_operator() {
         // Arrange
-        let from = ExpressionNode::Binding(BindingNode::new(
+        let from = ExpressionNode::Binding(BindingNode::with_type(
             Token::with_value(TokenKind::Identifier, "f"),
-            vec![ExpressionNode::Number(NumberNode::new(Token::with_value(
-                TokenKind::Number,
-                "42",
-            )))],
+            vec![ExpressionNode::Number(NumberNode::with_type(
+                Token::with_value(TokenKind::Number, "42"),
+                TYPE_N,
+            ))],
+            vec![TYPE_N],
         ));
         let to = ExpressionNode::Operator(OperatorNode::new(
             Token::with_value(TokenKind::Operator, "+"),
@@ -1045,7 +868,7 @@ mod test {
         ));
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_none());
@@ -1054,41 +877,59 @@ mod test {
     #[test]
     fn test_create_mapping_operator_operator() {
         // Arrange
-        let from = ExpressionNode::Operator(OperatorNode::new(
+        let from = ExpressionNode::Operator(OperatorNode::with_type(
             Token::with_value(TokenKind::Operator, "+"),
-            ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42"))),
-            ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "1"))),
+            ExpressionNode::Number(NumberNode::with_type(
+                Token::with_value(TokenKind::Number, "42"),
+                TYPE_N,
+            )),
+            ExpressionNode::Number(NumberNode::with_type(
+                Token::with_value(TokenKind::Number, "1"),
+                TYPE_N,
+            )),
+            vec![TYPE_N],
         ));
-        let to = ExpressionNode::Operator(OperatorNode::new(
+        let to = ExpressionNode::Operator(OperatorNode::with_type(
             Token::with_value(TokenKind::Operator, "+"),
-            ExpressionNode::Binding(BindingNode::new(
+            ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, "x"),
                 vec![],
+                vec![TYPE_N],
             )),
-            ExpressionNode::Binding(BindingNode::new(
+            ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, "y"),
                 vec![],
+                vec![TYPE_N],
             )),
+            vec![TYPE_N],
         ));
         let expected = HashMap::from([
             (
-                ExpressionNode::Binding(BindingNode::new(
+                ExpressionNode::Binding(BindingNode::with_type(
                     Token::with_value(TokenKind::Identifier, "x"),
                     vec![],
+                    vec![TYPE_N],
                 )),
-                ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42"))),
+                ExpressionNode::Number(NumberNode::with_type(
+                    Token::with_value(TokenKind::Number, "42"),
+                    TYPE_N,
+                )),
             ),
             (
-                ExpressionNode::Binding(BindingNode::new(
+                ExpressionNode::Binding(BindingNode::with_type(
                     Token::with_value(TokenKind::Identifier, "y"),
                     vec![],
+                    vec![TYPE_N],
                 )),
-                ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "1"))),
+                ExpressionNode::Number(NumberNode::with_type(
+                    Token::with_value(TokenKind::Number, "1"),
+                    TYPE_N,
+                )),
             ),
         ]);
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_some());
@@ -1108,7 +949,7 @@ mod test {
         ))));
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_none());
@@ -1117,23 +958,35 @@ mod test {
     #[test]
     fn test_create_mapping_paren_paren() {
         // Arrange
-        let from = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Number(NumberNode::new(
-            Token::with_value(TokenKind::Number, "42"),
-        ))));
-        let to = ExpressionNode::Paren(ParenNode::new(ExpressionNode::Binding(BindingNode::new(
-            Token::with_value(TokenKind::Identifier, "x"),
-            vec![],
-        ))));
-        let expected = HashMap::from([(
-            ExpressionNode::Binding(BindingNode::new(
+        let from = ExpressionNode::Paren(ParenNode::with_type(
+            ExpressionNode::Number(NumberNode::with_type(
+                Token::with_value(TokenKind::Number, "42"),
+                TYPE_N,
+            )),
+            vec![TYPE_N],
+        ));
+        let to = ExpressionNode::Paren(ParenNode::with_type(
+            ExpressionNode::Binding(BindingNode::with_type(
                 Token::with_value(TokenKind::Identifier, "x"),
                 vec![],
+                vec![TYPE_N],
             )),
-            ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42"))),
+            vec![TYPE_N],
+        ));
+        let expected = HashMap::from([(
+            ExpressionNode::Binding(BindingNode::with_type(
+                Token::with_value(TokenKind::Identifier, "x"),
+                vec![],
+                vec![TYPE_N],
+            )),
+            ExpressionNode::Number(NumberNode::with_type(
+                Token::with_value(TokenKind::Number, "42"),
+                TYPE_N,
+            )),
         )]);
 
         // Act
-        let mapping = create_mapping(&from, &to);
+        let mapping = from.create_mapping(&to);
 
         // Assert
         assert!(mapping.is_some());
@@ -1151,7 +1004,7 @@ mod test {
             ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42")));
 
         // Act
-        let result = apply_mapping(&expression, &mapping);
+        let result = expression.apply(&mapping);
 
         // Assert
         assert!(result.is_some());
@@ -1176,7 +1029,7 @@ mod test {
             ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42")));
 
         // Act
-        let result = apply_mapping(&expression, &mapping);
+        let result = expression.apply(&mapping);
 
         // Assert
         assert!(result.is_some());
@@ -1214,7 +1067,7 @@ mod test {
         ));
 
         // Act
-        let result = apply_mapping(&expression, &mapping);
+        let result = expression.apply(&mapping);
 
         // Assert
         assert!(result.is_some());
@@ -1246,7 +1099,7 @@ mod test {
         ));
 
         // Act
-        let result = apply_mapping(&expression, &mapping);
+        let result = expression.apply(&mapping);
 
         // Assert
         assert!(result.is_some());
@@ -1271,7 +1124,7 @@ mod test {
         )));
 
         // Act
-        let result = apply_mapping(&expression, &mapping);
+        let result = expression.apply(&mapping);
 
         // Assert
         assert!(result.is_some());
@@ -1281,25 +1134,32 @@ mod test {
     #[test]
     fn test_substitute_number_implication_id() {
         // Arrange
-        let expression =
-            ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42")));
+        let expression = ExpressionNode::Number(NumberNode::with_type(
+            Token::with_value(TokenKind::Number, "42"),
+            TYPE_N,
+        ));
         let implication = ImplicationNode::new(
             Vec::new(),
             vec![StatementNode::Relation(RelationNode::new(
                 RelationKind::Equality,
                 Token::new(TokenKind::Equal),
-                ExpressionNode::Binding(BindingNode::new(
+                ExpressionNode::Binding(BindingNode::with_type(
                     Token::with_value(TokenKind::Identifier, "a"),
                     vec![],
+                    vec![TYPE_N],
                 )),
-                ExpressionNode::Binding(BindingNode::new(
+                ExpressionNode::Binding(BindingNode::with_type(
                     Token::with_value(TokenKind::Identifier, "a"),
                     vec![],
+                    vec![TYPE_N],
                 )),
             ))],
         );
         let expected = vec![(
-            ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42"))),
+            ExpressionNode::Number(NumberNode::with_type(
+                Token::with_value(TokenKind::Number, "42"),
+                TYPE_N,
+            )),
             vec![],
         )];
         let solver = Solver::new(vec![implication.clone()]);
@@ -1314,57 +1174,65 @@ mod test {
     #[test]
     fn test_substitute_operator_implication_commutative() {
         // Arrange
-        let expression = ExpressionNode::Operator(OperatorNode::new(
+        let expression = ExpressionNode::Operator(OperatorNode::with_type(
             Token::with_value(TokenKind::Operator, "+"),
-            ExpressionNode::Binding(BindingNode::new(
+            ExpressionNode::Number(NumberNode::with_type(
                 Token::with_value(TokenKind::Identifier, "1"),
-                vec![],
+                TYPE_N,
             )),
-            ExpressionNode::Binding(BindingNode::new(
+            ExpressionNode::Number(NumberNode::with_type(
                 Token::with_value(TokenKind::Identifier, "2"),
-                vec![],
+                TYPE_N,
             )),
+            vec![TYPE_N],
         ));
         let implication = ImplicationNode::new(
             Vec::new(),
             vec![StatementNode::Relation(RelationNode::new(
                 RelationKind::Equality,
                 Token::new(TokenKind::Equal),
-                ExpressionNode::Operator(OperatorNode::new(
+                ExpressionNode::Operator(OperatorNode::with_type(
                     Token::with_value(TokenKind::Operator, "+"),
-                    ExpressionNode::Binding(BindingNode::new(
+                    ExpressionNode::Binding(BindingNode::with_type(
                         Token::with_value(TokenKind::Identifier, "b"),
                         vec![],
+                        vec![TYPE_N],
                     )),
-                    ExpressionNode::Binding(BindingNode::new(
+                    ExpressionNode::Binding(BindingNode::with_type(
                         Token::with_value(TokenKind::Identifier, "a"),
                         vec![],
+                        vec![TYPE_N],
                     )),
+                    vec![TYPE_N],
                 )),
-                ExpressionNode::Operator(OperatorNode::new(
+                ExpressionNode::Operator(OperatorNode::with_type(
                     Token::with_value(TokenKind::Operator, "+"),
-                    ExpressionNode::Binding(BindingNode::new(
+                    ExpressionNode::Binding(BindingNode::with_type(
                         Token::with_value(TokenKind::Identifier, "a"),
                         vec![],
+                        vec![TYPE_N],
                     )),
-                    ExpressionNode::Binding(BindingNode::new(
+                    ExpressionNode::Binding(BindingNode::with_type(
                         Token::with_value(TokenKind::Identifier, "b"),
                         vec![],
+                        vec![TYPE_N],
                     )),
+                    vec![TYPE_N],
                 )),
             ))],
         );
         let expected = vec![(
-            ExpressionNode::Operator(OperatorNode::new(
+            ExpressionNode::Operator(OperatorNode::with_type(
                 Token::with_value(TokenKind::Operator, "+"),
-                ExpressionNode::Binding(BindingNode::new(
+                ExpressionNode::Number(NumberNode::with_type(
                     Token::with_value(TokenKind::Identifier, "2"),
-                    vec![],
+                    TYPE_N,
                 )),
-                ExpressionNode::Binding(BindingNode::new(
+                ExpressionNode::Number(NumberNode::with_type(
                     Token::with_value(TokenKind::Identifier, "1"),
-                    vec![],
+                    TYPE_N,
                 )),
+                vec![TYPE_N],
             )),
             vec![],
         )];

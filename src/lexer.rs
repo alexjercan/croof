@@ -57,11 +57,9 @@ impl PartialOrd for Token {
 
 impl Ord for Token {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.kind.cmp(&other.kind).then_with(|| {
-            self.value
-                .as_deref()
-                .cmp(&other.value.as_deref())
-        })
+        self.kind
+            .cmp(&other.kind)
+            .then_with(|| self.value.as_deref().cmp(&other.value.as_deref()))
     }
 }
 

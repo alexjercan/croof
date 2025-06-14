@@ -1,9 +1,11 @@
-use std::fmt::Display;
+use std::collections::HashMap;
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use crate::lexer::{Lexer, SourceMap, Token, TokenKind};
+use crate::typechecker::can_infer_type;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserError {
@@ -476,6 +478,155 @@ impl ExpressionNode {
     pub fn distance(&self, _: &Self) -> i32 {
         1
     }
+
+    pub fn apply(
+        &self,
+        mapping: &HashMap<ExpressionNode, ExpressionNode>,
+    ) -> Option<ExpressionNode> {
+        match self {
+            ExpressionNode::Set(_) => todo!(),
+            ExpressionNode::Type(_) => todo!(),
+            ExpressionNode::Number(_) => Some(self.clone()),
+            ExpressionNode::Literal(_) => Some(self.clone()),
+            ExpressionNode::Binding(node) => {
+                // TODO: Can we do this better?
+                if node.arguments.is_empty() {
+                    return mapping.get(self).cloned();
+                }
+
+                let args = node
+                    .arguments
+                    .iter()
+                    .map(|arg| arg.apply(mapping))
+                    .collect::<Option<Vec<ExpressionNode>>>()?;
+
+                let mut func_type = args
+                    .iter()
+                    .filter_map(|arg| arg.node_type())
+                    .flatten()
+                    .collect::<Vec<String>>();
+                let return_type = node.clone().node_type?;
+                func_type.extend(return_type.iter().cloned());
+
+                let expr = ExpressionNode::Binding(BindingNode::with_type(
+                    Token::with_value(TokenKind::Identifier, node.name.value()),
+                    vec![],
+                    func_type,
+                ));
+
+                let mut function_node = node.clone();
+                function_node.arguments = args;
+                function_node.name = mapping
+                    .get(&expr)
+                    .cloned()
+                    .unwrap_or(ExpressionNode::Binding(function_node.clone()))
+                    .token();
+
+                Some(ExpressionNode::Binding(function_node))
+            }
+            ExpressionNode::Operator(node) => {
+                let left = node.left.apply(mapping)?;
+                let right = node.right.apply(mapping)?;
+
+                let mut operator_node = node.clone();
+                operator_node.left = Box::new(left);
+                operator_node.right = Box::new(right);
+
+                Some(ExpressionNode::Operator(operator_node))
+            }
+            ExpressionNode::Paren(node) => {
+                let expr = node.expression.apply(mapping)?;
+                let mut paren_node = node.clone();
+                paren_node.expression = Box::new(expr);
+
+                Some(ExpressionNode::Paren(paren_node))
+            }
+        }
+    }
+
+    fn create_mapping_helper(
+        &self,
+        to: &ExpressionNode,
+        mapping: &mut HashMap<ExpressionNode, ExpressionNode>,
+    ) -> bool {
+        let Some(from_type) = self.node_type() else {
+            return false;
+        };
+        let Some(to_type) = to.node_type() else {
+            return false;
+        };
+        if !can_infer_type(&from_type, &to_type) {
+            return false;
+        }
+
+        match to {
+            ExpressionNode::Set(_) => todo!(),
+            ExpressionNode::Type(_) => todo!(),
+            ExpressionNode::Number(to_node) => match self {
+                ExpressionNode::Number(from_node) => to_node.value == from_node.value,
+                _ => false,
+            },
+            ExpressionNode::Literal(to_node) => match self {
+                ExpressionNode::Literal(from_node) => to_node.value == from_node.value,
+                _ => false,
+            },
+            ExpressionNode::Binding(to_node) => {
+                if to_node.arguments.is_empty() {
+                    let has_mapping = mapping.contains_key(to);
+                    let should_substitute = !has_mapping || mapping.get(to) == Some(self);
+
+                    if !has_mapping {
+                        mapping.insert(to.clone(), self.clone());
+                    }
+
+                    return should_substitute;
+                }
+
+                match self {
+                    ExpressionNode::Binding(from_node) => {
+                        to_node.name == from_node.name
+                            && to_node.arguments.len() == from_node.arguments.len()
+                            && to_node.arguments.iter().zip(&from_node.arguments).all(
+                                |(to_arg, from_arg)| {
+                                    from_arg.create_mapping_helper(to_arg, mapping)
+                                },
+                            )
+                    }
+                    _ => false,
+                }
+            }
+            ExpressionNode::Operator(to_node) => match self {
+                ExpressionNode::Operator(operator_node) => {
+                    to_node.operator == operator_node.operator
+                        && operator_node
+                            .left
+                            .create_mapping_helper(&to_node.left, mapping)
+                        && operator_node
+                            .right
+                            .create_mapping_helper(&to_node.right, mapping)
+                }
+                _ => false,
+            },
+            ExpressionNode::Paren(to_node) => match self {
+                ExpressionNode::Paren(paren_node) => paren_node
+                    .expression
+                    .create_mapping_helper(&to_node.expression, mapping),
+                _ => false,
+            },
+        }
+    }
+
+    pub fn create_mapping(
+        &self,
+        expr: &ExpressionNode,
+    ) -> Option<HashMap<ExpressionNode, ExpressionNode>> {
+        let mut mapping = HashMap::new();
+        if self.create_mapping_helper(expr, &mut mapping) {
+            Some(mapping)
+        } else {
+            None
+        }
+    }
 }
 
 impl Display for ExpressionNode {
@@ -537,10 +688,12 @@ impl Display for RelationNode {
     }
 }
 
+pub type SubstituteFn = Arc<dyn Fn(&ExpressionNode) -> Option<ExpressionNode> + Send + Sync>;
+
 #[derive(Clone)]
 pub struct BuiltinNode {
     pub display: String,
-    pub substitute_fn: Arc<dyn Fn(&ExpressionNode) -> Option<ExpressionNode> + Send + Sync>,
+    pub substitute_fn: SubstituteFn,
 }
 
 impl Debug for BuiltinNode {
@@ -585,6 +738,31 @@ pub enum StatementNode {
     Quantifier(QuantifierNode),
     Relation(RelationNode),
     Builtin(BuiltinNode),
+}
+
+impl StatementNode {
+    pub fn create_mapping(
+        &self,
+        expr: &ExpressionNode,
+    ) -> Option<HashMap<ExpressionNode, ExpressionNode>> {
+        match self {
+            StatementNode::Quantifier(_) => todo!("Implement mapping for QuantifierNode"),
+            StatementNode::Relation(node) => expr.create_mapping(&node.left),
+            StatementNode::Builtin(_) => Some(HashMap::new()),
+        }
+    }
+
+    pub fn apply(
+        &self,
+        expression: &ExpressionNode,
+        mapping: &HashMap<ExpressionNode, ExpressionNode>,
+    ) -> Option<ExpressionNode> {
+        match self {
+            StatementNode::Quantifier(_) => todo!("Implement apply for QuantifierNode"),
+            StatementNode::Relation(node) => node.right.apply(mapping),
+            StatementNode::Builtin(node) => node.apply(expression),
+        }
+    }
 }
 
 impl Display for StatementNode {
