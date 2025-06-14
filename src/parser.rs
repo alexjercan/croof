@@ -466,6 +466,7 @@ impl Display for RelationNode {
 pub enum StatementNode {
     Quantifier(QuantifierNode),
     Relation(RelationNode),
+    // TODO: Add builtin statements as lambda functions
 }
 
 impl Display for StatementNode {

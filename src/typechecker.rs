@@ -4,8 +4,8 @@ use crate::{
     lexer::{SourceMap, Token, TokenKind},
     parser::{
         BindingNode, DefineFunctionNode, DefineNode, DefineSetNode, ExpressionNode,
-        ImplicationNode, OperatorNode, QuantifierNode, RelationNode, SetNode, StatementNode,
-        TypeNode,
+        ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, QuantifierNode,
+        RelationNode, SetNode, StatementNode, TypeNode,
     },
 };
 
@@ -396,6 +396,58 @@ impl Typechecker {
         (None, errors)
     }
 
+    fn check_number(&self, node: &mut NumberNode) -> (Option<Vec<String>>, Vec<TypecheckerError>) {
+        let Ok(number) = node.value.value().parse::<i64>() else {
+            return (
+                None,
+                vec![TypecheckerError::UndefinedLiteral(node.value.clone())],
+            );
+        };
+        let type_value = if number >= 0 { TYPE_N } else { TYPE_Z };
+
+        node.node_type = Some(vec![type_value.to_string()]);
+
+        (node.node_type.clone(), vec![])
+    }
+
+    fn check_literal(
+        &self,
+        node: &mut LiteralNode,
+    ) -> (Option<Vec<String>>, Vec<TypecheckerError>) {
+        for (symbol, defines) in &self.defines {
+            for define in defines.values() {
+                if let DefineNode::Set(define) = define {
+                    if define
+                        .set
+                        .elements
+                        .contains(&ExpressionNode::Literal(node.clone()))
+                    {
+                        node.node_type = Some(vec![symbol.clone()]);
+
+                        return (node.node_type.clone(), vec![]);
+                    }
+                };
+            }
+        }
+
+        (
+            None,
+            vec![TypecheckerError::UndefinedLiteral(node.value.clone())],
+        )
+    }
+
+    fn check_paren(
+        &self,
+        node: &mut ParenNode,
+        symbols: &HashMap<String, TypeNode>,
+    ) -> (Option<Vec<String>>, Vec<TypecheckerError>) {
+        let (type_node, paren_errors) = self.check_expression(&mut node.expression, symbols);
+
+        node.node_type = type_node.clone();
+
+        (type_node, paren_errors)
+    }
+
     pub fn check_expression(
         &self,
         expression: &mut ExpressionNode,
@@ -404,55 +456,11 @@ impl Typechecker {
         match expression {
             ExpressionNode::Set(_) => todo!(),
             ExpressionNode::Type(_) => todo!(),
-            ExpressionNode::Number(number_node) => {
-                let Ok(number) = number_node.value.value().parse::<i64>() else {
-                    return (
-                        None,
-                        vec![TypecheckerError::UndefinedLiteral(
-                            number_node.value.clone(),
-                        )],
-                    );
-                };
-                let type_value = if number >= 0 { TYPE_N } else { TYPE_Z };
-
-                number_node.node_type = Some(vec![type_value.to_string()]);
-
-                (number_node.node_type.clone(), vec![])
-            }
-            ExpressionNode::Literal(literal_node) => {
-                for (symbol, defines) in &self.defines {
-                    for define in defines.values() {
-                        if let DefineNode::Set(node) = define {
-                            if node
-                                .set
-                                .elements
-                                .contains(&ExpressionNode::Literal(literal_node.clone()))
-                            {
-                                literal_node.node_type = Some(vec![symbol.clone()]);
-
-                                return (literal_node.node_type.clone(), vec![]);
-                            }
-                        };
-                    }
-                }
-
-                (
-                    None,
-                    vec![TypecheckerError::UndefinedLiteral(
-                        literal_node.value.clone(),
-                    )],
-                )
-            }
+            ExpressionNode::Number(node) => self.check_number(node),
+            ExpressionNode::Literal(node) => self.check_literal(node),
             ExpressionNode::Binding(node) => self.check_binding(node, symbols),
             ExpressionNode::Operator(node) => self.check_operator(node, symbols),
-            ExpressionNode::Paren(paren_node) => {
-                let (type_node, paren_errors) =
-                    self.check_expression(&mut paren_node.expression, symbols);
-
-                paren_node.node_type = type_node.clone();
-
-                (type_node, paren_errors)
-            }
+            ExpressionNode::Paren(node) => self.check_paren(node, symbols),
         }
     }
 

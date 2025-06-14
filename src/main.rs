@@ -97,4 +97,3 @@ fn main() -> ExitCode {
 
 // TODO: implement PartialEq and PartialOrd for each type in ExpressionNode
 // this should help with RelationNode evaluations
-// TODO: refactor typechecker check functions for the rest of the expressions
