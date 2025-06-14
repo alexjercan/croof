@@ -3,9 +3,7 @@ use std::collections::{hash_map, HashMap};
 use crate::{
     lexer::{SourceMap, Token, TokenKind},
     parser::{
-        BindingNode, DefineFunctionNode, DefineNode, DefineSetNode, ExpressionNode,
-        ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, QuantifierNode,
-        RelationNode, SetNode, StatementNode, TypeNode,
+        BindingNode, DefineFunctionNode, DefineNode, DefineSetNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, QuantifierNode, RelationNode, SetNode, StatementNode, TypeNode
     },
 };
 
@@ -520,10 +518,11 @@ impl Typechecker {
                 self.check_quantifier(quantifier_node, symbols)
             }
             StatementNode::Relation(relation_node) => self.check_relation(relation_node, symbols),
+            StatementNode::Builtin(_) => unreachable!("Builtin statements should not be checked here"),
         }
     }
 
-    pub fn check(&self, implication: &mut ImplicationNode) -> Vec<TypecheckerError> {
+    pub fn check_implication(&self, implication: &mut ImplicationNode) -> Vec<TypecheckerError> {
         let mut symbols: HashMap<String, TypeNode> = HashMap::new();
         let mut errors = vec![];
 

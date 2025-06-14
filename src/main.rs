@@ -59,7 +59,7 @@ fn main() -> ExitCode {
     let (typechecker, mut errors) = Typechecker::new(ast.defines.clone(), &sourcemap);
 
     for implication in &mut ast.implications {
-        errors.extend(typechecker.check(implication));
+        errors.extend(typechecker.check_implication(implication));
     }
 
     for eval in &mut ast.evaluations {

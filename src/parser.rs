@@ -1,5 +1,7 @@
 use std::fmt::Display;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 use crate::lexer::{Lexer, SourceMap, Token, TokenKind};
 
@@ -535,11 +537,54 @@ impl Display for RelationNode {
     }
 }
 
+#[derive(Clone)]
+pub struct BuiltinNode {
+    pub display: String,
+    pub substitute_fn: Arc<dyn Fn(&ExpressionNode) -> Option<ExpressionNode> + Send + Sync>,
+}
+
+impl Debug for BuiltinNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BuiltinNode({})", self.display)
+    }
+}
+
+impl PartialEq for BuiltinNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.display == other.display
+    }
+}
+
+impl Eq for BuiltinNode {}
+
+impl BuiltinNode {
+    pub fn new<S, F>(display: S, substitute_fn: F) -> Self
+    where
+        S: Into<String>,
+        F: 'static + Fn(&ExpressionNode) -> Option<ExpressionNode> + Send + Sync,
+    {
+        BuiltinNode {
+            display: display.into(),
+            substitute_fn: Arc::new(substitute_fn),
+        }
+    }
+
+    pub fn apply(&self, expr: &ExpressionNode) -> Option<ExpressionNode> {
+        (self.substitute_fn)(expr)
+    }
+}
+
+impl Display for BuiltinNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.display)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StatementNode {
     Quantifier(QuantifierNode),
     Relation(RelationNode),
-    // TODO: Add builtin statements as lambda functions
+    Builtin(BuiltinNode),
 }
 
 impl Display for StatementNode {
@@ -547,6 +592,7 @@ impl Display for StatementNode {
         match self {
             StatementNode::Quantifier(quantifier) => write!(f, "{}", quantifier),
             StatementNode::Relation(relation) => write!(f, "{}", relation),
+            StatementNode::Builtin(builtin) => write!(f, "{}", builtin),
         }
     }
 }
