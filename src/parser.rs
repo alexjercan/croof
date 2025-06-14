@@ -23,7 +23,7 @@ pub struct Parser {
     next_token: Token,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TypeNode {
     pub types: Vec<Token>,
 }
@@ -92,7 +92,7 @@ impl Display for QuantifierNode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SetNode {
     pub elements: Vec<ExpressionNode>,
 }
@@ -135,6 +135,28 @@ impl NumberNode {
     }
 }
 
+impl PartialOrd for NumberNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for NumberNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let type_node = self.node_type.as_ref().unwrap().first().unwrap().clone();
+        let type_other = other.node_type.as_ref().unwrap().first().unwrap().clone();
+
+        if type_node == type_other {
+            let number_node = self.value.value().parse::<i64>().unwrap();
+            let other_node = other.value.value().parse::<i64>().unwrap();
+
+            return number_node.cmp(&other_node);
+        }
+
+        type_node.cmp(&type_other)
+    }
+}
+
 impl Display for NumberNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // match &self.node_type {
@@ -168,6 +190,25 @@ impl LiteralNode {
             value,
             node_type: Some(vec![type_node.into()]),
         }
+    }
+}
+
+impl PartialOrd for LiteralNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for LiteralNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let type_node = self.node_type.as_ref().unwrap().first().unwrap().clone();
+        let type_other = other.node_type.as_ref().unwrap().first().unwrap().clone();
+
+        if type_node == type_other {
+            return self.value.value().cmp(&other.value.value());
+        }
+
+        type_node.cmp(&type_other)
     }
 }
 
@@ -207,6 +248,25 @@ impl BindingNode {
             arguments,
             node_type: Some(node_type.into_iter().map(Into::into).collect()),
         }
+    }
+}
+
+impl PartialOrd for BindingNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BindingNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let type_node = self.node_type.as_ref().unwrap().first().unwrap().clone();
+        let type_other = other.node_type.as_ref().unwrap().first().unwrap().clone();
+
+        if type_node == type_other {
+            return self.name.value().cmp(&other.name.value());
+        }
+
+        type_node.cmp(&type_other)
     }
 }
 
@@ -264,6 +324,25 @@ impl OperatorNode {
     }
 }
 
+impl PartialOrd for OperatorNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for OperatorNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let type_node = self.node_type.as_ref().unwrap().first().unwrap().clone();
+        let type_other = other.node_type.as_ref().unwrap().first().unwrap().clone();
+
+        if type_node == type_other {
+            return self.operator.value().cmp(&other.operator.value());
+        }
+
+        type_node.cmp(&type_other)
+    }
+}
+
 impl Display for OperatorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // match &self.node_type {
@@ -304,6 +383,25 @@ impl ParenNode {
     }
 }
 
+impl PartialOrd for ParenNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ParenNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let type_node = self.node_type.as_ref().unwrap().first().unwrap().clone();
+        let type_other = other.node_type.as_ref().unwrap().first().unwrap().clone();
+
+        if type_node == type_other {
+            return self.expression.cmp(&other.expression);
+        }
+
+        type_node.cmp(&type_other)
+    }
+}
+
 impl Display for ParenNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // match &self.node_type {
@@ -319,7 +417,7 @@ impl Display for ParenNode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ExpressionNode {
     Set(SetNode),
     Type(TypeNode),
@@ -388,31 +486,6 @@ impl Display for ExpressionNode {
             ExpressionNode::Binding(node) => write!(f, "{}", node),
             ExpressionNode::Operator(node) => write!(f, "{}", node),
             ExpressionNode::Paren(node) => write!(f, "{}", node),
-        }
-    }
-}
-
-impl PartialOrd for ExpressionNode {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match (self, other) {
-            (ExpressionNode::Number(node), ExpressionNode::Number(other)) => {
-                let type_node = node.clone().node_type?.first()?.clone();
-                let type_other = other.clone().node_type?.first()?.clone();
-
-                if type_node == type_other {
-                    let Ok(number_node) = node.value.value().parse::<i64>() else {
-                        return None;
-                    };
-                    let Ok(other_node) = other.value.value().parse::<i64>() else {
-                        return None;
-                    };
-
-                    return number_node.partial_cmp(&other_node);
-                }
-
-                None
-            }
-            _ => None,
         }
     }
 }

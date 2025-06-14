@@ -95,5 +95,4 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-// TODO: implement PartialEq and PartialOrd for each type in ExpressionNode
-// this should help with RelationNode evaluations
+// TODO: How to actually compare ExpressionNode?

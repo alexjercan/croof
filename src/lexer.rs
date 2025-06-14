@@ -5,7 +5,7 @@ use std::io::{self, Read};
 
 const EOF: char = '\0';
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum TokenKind {
     Eof,
     #[default]
@@ -48,6 +48,22 @@ impl PartialEq for Token {
 }
 
 impl Eq for Token {}
+
+impl PartialOrd for Token {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Token {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.kind.cmp(&other.kind).then_with(|| {
+            self.value
+                .as_deref()
+                .cmp(&other.value.as_deref())
+        })
+    }
+}
 
 impl Hash for Token {
     fn hash<H: Hasher>(&self, state: &mut H) {
