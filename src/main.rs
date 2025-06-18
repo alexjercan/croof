@@ -2,10 +2,7 @@ use clap::Parser as ArgParser;
 use std::{collections::HashMap, process::ExitCode};
 
 use croof::{
-    lexer::SourceMap,
-    parser::{Parser, ProgramNode},
-    solver::Solver,
-    typechecker::Typechecker,
+    lexer::SourceMap, matcher::Matcher, parser::{Parser, ProgramNode}, solver::{AstarSolver, Solver}, typechecker::{builtin_implications, Typechecker}
 };
 
 #[derive(ArgParser, Debug)]
@@ -61,6 +58,7 @@ fn main() -> ExitCode {
     for implication in &mut ast.implications {
         errors.extend(typechecker.check_implication(implication));
     }
+    ast.implications.extend(builtin_implications());
 
     for eval in &mut ast.evaluations {
         let (_, eval_errors) = typechecker.check_expression(eval, &HashMap::default());
@@ -82,7 +80,9 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let solver = Solver::new(ast.implications.clone());
+    let matcher = Matcher::new();
+    let solver = AstarSolver::new(matcher, ast.implications.clone());
+
     for expression in &ast.evaluations {
         match solver.solve(expression) {
             Ok((steps, result)) => {

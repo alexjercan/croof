@@ -3,18 +3,18 @@ use std::collections::{hash_map, HashMap};
 use crate::{
     lexer::{SourceMap, Token, TokenKind},
     parser::{
-        BindingNode, DefineFunctionNode, DefineNode, DefineSetNode, ExpressionNode,
-        ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, QuantifierNode,
-        RelationNode, SetNode, StatementNode, TypeNode,
+        BindingNode, BuiltinNode, DefineFunctionNode, DefineNode, DefineSetNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, QuantifierNode, RelationNode, SetNode, StatementNode, TypeNode
     },
 };
 
+/// Constants for built-in types and functions
 pub const TYPE_N: &str = "N";
 pub const FUNCTION_SUCC: &str = "succ"; // N -> N
 
 pub const TYPE_Z: &str = "Z";
 pub const FUNCTION_NEG: &str = "neg"; // Z -> Z
 
+/// TypecheckerError represents errors that can occur during the type checking process.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypecheckerError {
     UndefinedType(Token),
@@ -38,11 +38,24 @@ pub enum TypecheckerError {
     RedefinedOperator(Token),
 }
 
+/// Typechecker is responsible for checking types of expressions and statements in the program.
 pub struct Typechecker {
     sourcemap: SourceMap,
     defines: HashMap<String, HashMap<Vec<String>, DefineNode>>,
 }
 
+/// Helper function to check if two types can be inferred from each other
+///
+/// # Arguments
+/// * `left_type` - The type of the left expression.
+/// * `right_type` - The type of the right expression.
+///
+/// # Returns
+/// `true` if the types can be inferred from each other, `false` otherwise.
+///
+/// # Notes
+/// This function checks if the left type is `N` and the right type is `Z`, or if both types are
+/// equal.
 pub fn can_infer_type(left_type: &[String], right_type: &[String]) -> bool {
     (left_type.len() == 1
         && right_type.len() == 1
@@ -50,7 +63,254 @@ pub fn can_infer_type(left_type: &[String], right_type: &[String]) -> bool {
         || left_type == right_type
 }
 
+/// Returns a list of built-in implications that can be used for type checking and inference.
+/// This function provides a set of common implications that are used in the type checking process
+/// to infer types and validate expressions.
+///
+/// # Returns
+/// A vector of `ImplicationNode` instances representing built-in implications.
+pub fn builtin_implications() -> Vec<ImplicationNode> {
+    vec![
+        // forall a : N => a = succ(a - 1)
+        ImplicationNode::new(
+            vec![],
+            vec![StatementNode::Builtin(BuiltinNode::new(
+                "forall a : N => a = succ(a - 1)",
+                |expression| {
+                    if let ExpressionNode::Number(node) = expression {
+                        if let Some(TYPE_N) = node
+                            .node_type
+                            .as_ref()
+                            .and_then(|t| t.first())
+                            .cloned()
+                            .as_deref()
+                        {
+                            let value = node.value.value().parse::<u64>().ok()?;
+                            if value == 0 {
+                                return None;
+                            }
+
+                            let number = NumberNode::with_type(
+                                Token::with_value(TokenKind::Number, (value - 1).to_string()),
+                                TYPE_N,
+                            );
+
+                            let function = BindingNode::with_type(
+                                Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
+                                vec![ExpressionNode::Number(number.clone())],
+                                vec![TYPE_N],
+                            );
+                            let substitution = ExpressionNode::Binding(function);
+
+                            return Some(substitution);
+                        }
+                    }
+
+                    None
+                },
+            ))],
+        ),
+        // forall a : Z => a = succ(a - 1)
+        ImplicationNode::new(
+            vec![],
+            vec![StatementNode::Builtin(BuiltinNode::new(
+                "forall a : Z => a = succ(a - 1)",
+                |expression| {
+                    if let ExpressionNode::Number(node) = expression {
+                        if let Some(TYPE_Z) = node
+                            .node_type
+                            .as_ref()
+                            .and_then(|t| t.first())
+                            .cloned()
+                            .as_deref()
+                        {
+                            let value = node.value.value().parse::<i64>().ok()?;
+                            if value <= 0 {
+                                return None;
+                            }
+
+                            let number = NumberNode::with_type(
+                                Token::with_value(TokenKind::Number, (value - 1).to_string()),
+                                TYPE_N,
+                            );
+
+                            let function = BindingNode::with_type(
+                                Token::with_value(TokenKind::Identifier, FUNCTION_SUCC),
+                                vec![ExpressionNode::Number(number.clone())],
+                                vec![TYPE_N],
+                            );
+                            let substitution = ExpressionNode::Binding(function);
+
+                            return Some(substitution);
+                        }
+                    }
+
+                    None
+                },
+            ))],
+        ),
+        // forall a : Z, a > 0 => -a = neg(a)
+        ImplicationNode::new(
+            vec![],
+            vec![StatementNode::Builtin(BuiltinNode::new(
+                "forall a : Z, a > 0 => -a = neg(a)",
+                |expression| {
+                    if let ExpressionNode::Number(node) = expression {
+                        if let Some(TYPE_Z) = node
+                            .node_type
+                            .as_ref()
+                            .and_then(|t| t.first())
+                            .cloned()
+                            .as_deref()
+                        {
+                            let value = node.value.value().parse::<i64>().ok()?;
+                            if value > 0 {
+                                return None;
+                            }
+
+                            let number = NumberNode::with_type(
+                                Token::with_value(TokenKind::Number, (-value).to_string()),
+                                TYPE_Z,
+                            );
+
+                            let function = BindingNode::with_type(
+                                Token::with_value(TokenKind::Identifier, FUNCTION_NEG),
+                                vec![ExpressionNode::Number(number.clone())],
+                                vec![TYPE_Z],
+                            );
+
+                            let substitution = ExpressionNode::Binding(function);
+
+                            return Some(substitution);
+                        }
+                    }
+
+                    None
+                },
+            ))],
+        ),
+        // forall a : N => succ(a) = a + 1
+        ImplicationNode::new(
+            vec![],
+            vec![StatementNode::Builtin(BuiltinNode::new(
+                "forall a : N => succ(a) = a + 1",
+                |expression| {
+                    if let ExpressionNode::Binding(expr_node) = expression {
+                        if expr_node.name.value() == FUNCTION_SUCC && expr_node.arguments.len() == 1
+                        {
+                            if let ExpressionNode::Number(number_node) = &expr_node.arguments[0] {
+                                if let Some(TYPE_N) = number_node
+                                    .node_type
+                                    .as_ref()
+                                    .and_then(|t| t.first())
+                                    .cloned()
+                                    .as_deref()
+                                {
+                                    let value = number_node.value.value().parse::<u64>().ok()?;
+                                    let number = NumberNode::with_type(
+                                        Token::with_value(
+                                            TokenKind::Number,
+                                            (value + 1).to_string(),
+                                        ),
+                                        TYPE_N,
+                                    );
+
+                                    let substitution = ExpressionNode::Number(number);
+
+                                    return Some(substitution);
+                                }
+                            }
+                        }
+                    }
+
+                    None
+                },
+            ))],
+        ),
+        // forall a : Z => succ(a) = a + 1
+        ImplicationNode::new(
+            vec![],
+            vec![StatementNode::Builtin(BuiltinNode::new(
+                "forall a : Z => succ(a) = a + 1",
+                |expression| {
+                    if let ExpressionNode::Binding(expr_node) = expression {
+                        if expr_node.name.value() == FUNCTION_SUCC && expr_node.arguments.len() == 1
+                        {
+                            if let ExpressionNode::Number(number_node) = &expr_node.arguments[0] {
+                                if let Some(TYPE_Z) = number_node
+                                    .node_type
+                                    .as_ref()
+                                    .and_then(|t| t.first())
+                                    .cloned()
+                                    .as_deref()
+                                {
+                                    let value = number_node.value.value().parse::<i64>().ok()?;
+                                    let number = NumberNode::with_type(
+                                        Token::with_value(
+                                            TokenKind::Number,
+                                            (value + 1).to_string(),
+                                        ),
+                                        TYPE_Z,
+                                    );
+
+                                    let substitution = ExpressionNode::Number(number);
+
+                                    return Some(substitution);
+                                }
+                            }
+                        }
+                    }
+
+                    None
+                },
+            ))],
+        ),
+        // forall a : Z => neg(a) = -a
+        ImplicationNode::new(
+            vec![],
+            vec![StatementNode::Builtin(BuiltinNode::new(
+                "forall a : Z => neg(a) = -a",
+                |expression| {
+                    if let ExpressionNode::Binding(expr_node) = expression {
+                        if expr_node.name.value() == FUNCTION_NEG && expr_node.arguments.len() == 1
+                        {
+                            if let ExpressionNode::Number(number_node) = &expr_node.arguments[0] {
+                                if let Some(TYPE_Z) = number_node
+                                    .node_type
+                                    .as_ref()
+                                    .and_then(|t| t.first())
+                                    .cloned()
+                                    .as_deref()
+                                {
+                                    let value = number_node.value.value().parse::<i64>().ok()?;
+
+                                    let number = NumberNode::with_type(
+                                        Token::with_value(TokenKind::Number, (-value).to_string()),
+                                        TYPE_Z,
+                                    );
+
+                                    let substitution = ExpressionNode::Number(number);
+
+                                    return Some(substitution);
+                                }
+                            }
+                        }
+                    }
+
+                    None
+                },
+            ))],
+        ),
+    ]
+}
+
 impl Typechecker {
+    /// Creates a new Typechecker instance with built-in definitions and checks for redefinitions.
+    ///
+    /// # Notes
+    /// * This function initializes the typechecker with built-in types and functions such as `N`,
+    /// `Z`, `succ`, and `neg`.
+    /// * It also checks for redefinitions of user-defined types, functions, and operators.
     pub fn new(defines: Vec<DefineNode>, sourcemap: &SourceMap) -> (Self, Vec<TypecheckerError>) {
         let mut mapping: HashMap<String, HashMap<Vec<String>, DefineNode>> = HashMap::new();
 
@@ -448,6 +708,17 @@ impl Typechecker {
         (type_node, paren_errors)
     }
 
+    /// Checks the type of an expression and returns the type and any errors encountered.
+    ///
+    /// # Arguments
+    /// * `expression` - A mutable reference to the expression node to be checked.
+    /// * `symbols` - A reference to a map of symbols and their types.
+    ///
+    /// # Returns
+    /// A tuple containing:
+    /// * An `Option<Vec<String>>` representing the type of the expression if it can be determined,
+    /// * a `Vec<TypecheckerError>` containing any errors encountered during the type checking
+    /// process.
     pub fn check_expression(
         &self,
         expression: &mut ExpressionNode,
@@ -520,12 +791,18 @@ impl Typechecker {
                 self.check_quantifier(quantifier_node, symbols)
             }
             StatementNode::Relation(relation_node) => self.check_relation(relation_node, symbols),
-            StatementNode::Builtin(_) => {
-                unreachable!("Builtin statements should not be checked here")
-            }
+            StatementNode::Builtin(_) => vec![], // Built-in statements are assumed to be valid
         }
     }
 
+    /// Checks an implication node, validating its conditions and conclusions.
+    ///
+    /// # Arguments
+    /// * `implication` - A mutable reference to the implication node to be checked.
+    ///
+    /// # Returns
+    /// A vector of `TypecheckerError` containing any errors encountered during the type checking
+    /// process.
     pub fn check_implication(&self, implication: &mut ImplicationNode) -> Vec<TypecheckerError> {
         let mut symbols: HashMap<String, TypeNode> = HashMap::new();
         let mut errors = vec![];
@@ -541,6 +818,11 @@ impl Typechecker {
         errors
     }
 
+    /// Displays the errors encountered during type checking.
+    ///
+    /// # Arguments
+    /// * `errors` - A reference to a vector of `TypecheckerError` containing the errors to be
+    /// displayed.
     pub fn display_errors(&self, errors: &Vec<TypecheckerError>) {
         for error in errors {
             match error {

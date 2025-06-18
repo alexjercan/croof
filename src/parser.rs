@@ -7,6 +7,7 @@ use std::sync::Arc;
 use crate::lexer::{Lexer, SourceMap, Token, TokenKind};
 use crate::typechecker::can_infer_type;
 
+/// Represents a parser error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserError {
     Todo(String),
@@ -20,6 +21,12 @@ impl Display for ParserError {
     }
 }
 
+/// Represents a parser that processes tokens from a lexer and builds an abstract syntax tree
+/// (AST).
+///
+/// The parser uses a lexer to tokenize the input and a source map to keep track of the
+/// source locations of tokens. It maintains the current token and the next token to facilitate
+/// parsing operations.
 pub struct Parser {
     lexer: Lexer,
     sourcemap: SourceMap,
@@ -27,12 +34,22 @@ pub struct Parser {
     next_token: Token,
 }
 
+/// The TypeNode represents a sequence of types in the abstract syntax tree.
+///
+/// It is used to represent function types, where each type in the sequence corresponds to
+/// a parameter type, and the last type corresponds to the return type of the function.
+///
+/// # Example
+/// ```croof
+/// N -> N -> N
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TypeNode {
     pub types: Vec<Token>,
 }
 
 impl TypeNode {
+    /// Creates a new TypeNode with the given types.
     pub fn new(types: Vec<Token>) -> Self {
         TypeNode { types }
     }
@@ -52,6 +69,7 @@ impl Display for TypeNode {
     }
 }
 
+/// The QuantifierKind represents the kind of quantifier used in the abstract syntax tree.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum QuantifierKind {
     Forall,
@@ -67,6 +85,16 @@ impl Display for QuantifierKind {
     }
 }
 
+/// The QuantifierNode represents a quantifier in the abstract syntax tree.
+///
+/// It contains the kind of quantifier, the symbol representing the quantifier,
+/// and the type node associated with the quantifier.
+///
+/// # Example
+/// ```croof
+/// forall f : N -> N -> N
+/// exists x : N
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct QuantifierNode {
     pub kind: QuantifierKind,
@@ -75,6 +103,7 @@ pub struct QuantifierNode {
 }
 
 impl QuantifierNode {
+    /// Creates a new QuantifierNode with the given kind, symbol, and type node.
     pub fn new(kind: QuantifierKind, symbol: Token, type_node: TypeNode) -> Self {
         QuantifierNode {
             kind,
@@ -96,12 +125,22 @@ impl Display for QuantifierNode {
     }
 }
 
+/// The SetNode represents a set of elements in the abstract syntax tree.
+///
+/// It contains a vector of `ExpressionNode` elements, which can be any valid expression
+///
+/// # Example
+/// ```croof
+/// {1, 2, 3}
+/// {f(1), g(2)}
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SetNode {
     pub elements: Vec<ExpressionNode>,
 }
 
 impl SetNode {
+    /// Creates a new SetNode with the given elements.
     pub fn new(elements: Vec<ExpressionNode>) -> Self {
         SetNode { elements }
     }
@@ -114,6 +153,15 @@ impl Display for SetNode {
     }
 }
 
+/// The NumberNode represents a numeric value in the abstract syntax tree.
+///
+/// It contains a `Token` representing the numeric value and an optional type node.
+///
+/// # Example
+/// ```croof
+/// 42
+/// -3
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NumberNode {
     pub value: Token,
@@ -121,6 +169,7 @@ pub struct NumberNode {
 }
 
 impl NumberNode {
+    /// Creates a new NumberNode with the given value.
     pub fn new(value: Token) -> Self {
         NumberNode {
             value,
@@ -128,6 +177,7 @@ impl NumberNode {
         }
     }
 
+    /// Creates a new NumberNode with the given value and type.
     pub fn with_type<S>(value: Token, node_type: S) -> Self
     where
         S: Into<String>,
@@ -172,6 +222,15 @@ impl Display for NumberNode {
     }
 }
 
+/// The LiteralNode represents a literal value in the abstract syntax tree.
+///
+/// It contains a `Token` representing the literal value and an optional type node.
+///
+/// # Example
+/// ```croof
+/// "Hello, World!"
+/// "42"
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LiteralNode {
     pub value: Token,
@@ -179,6 +238,7 @@ pub struct LiteralNode {
 }
 
 impl LiteralNode {
+    /// Creates a new LiteralNode with the given value.
     pub fn new(value: Token) -> Self {
         LiteralNode {
             value,
@@ -186,6 +246,7 @@ impl LiteralNode {
         }
     }
 
+    /// Creates a new LiteralNode with the given value and type.
     pub fn with_type<S>(value: Token, type_node: S) -> Self
     where
         S: Into<String>,
@@ -227,6 +288,18 @@ impl Display for LiteralNode {
     }
 }
 
+/// The BindingNode represents a function or a binding in the abstract syntax tree.
+///
+/// It contains a `Token` representing the name of the binding, a vector of `ExpressionNode`
+/// arguments, and an optional type node that represents the type of the binding.
+///
+/// # Note
+/// The `node_type` should be filled with the type of the binding at the time of type checking.
+///
+/// # Example
+/// ```croof
+/// f(x, 1)
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BindingNode {
     pub name: Token,
@@ -235,6 +308,7 @@ pub struct BindingNode {
 }
 
 impl BindingNode {
+    /// Creates a new BindingNode with the given name and arguments.
     pub fn new(name: Token, arguments: Vec<ExpressionNode>) -> Self {
         BindingNode {
             name,
@@ -243,6 +317,7 @@ impl BindingNode {
         }
     }
 
+    /// Creates a new BindingNode with the given name, arguments, and type.
     pub fn with_type<S>(name: Token, arguments: Vec<ExpressionNode>, node_type: Vec<S>) -> Self
     where
         S: Into<String>,
@@ -292,6 +367,16 @@ impl Display for BindingNode {
     }
 }
 
+/// The OperatorNode represents an operator in the abstract syntax tree.
+///
+/// It contains a `Token` representing the operator, two `ExpressionNode` operands (left and
+/// right), and an optional type node that represents the type of the operation.
+///
+/// # Example
+/// ```croof
+/// 1 + 2
+/// f(x, y) * g(z)
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OperatorNode {
     pub operator: Token,
@@ -301,6 +386,7 @@ pub struct OperatorNode {
 }
 
 impl OperatorNode {
+    /// Creates a new OperatorNode with the given operator, left operand, and right operand.
     pub fn new(operator: Token, left: ExpressionNode, right: ExpressionNode) -> Self {
         OperatorNode {
             operator,
@@ -310,6 +396,7 @@ impl OperatorNode {
         }
     }
 
+    /// Creates a new OperatorNode with the given operator, left operand, right operand, and type.
     pub fn with_type<S>(
         operator: Token,
         left: ExpressionNode,
@@ -362,6 +449,15 @@ impl Display for OperatorNode {
     }
 }
 
+/// The ParenNode represents a parenthesized expression in the abstract syntax tree.
+///
+/// It contains an `ExpressionNode` representing the expression inside the parentheses,
+/// and an optional type node that represents the type of the expression.
+///
+/// # Example
+/// ```croof
+/// (f(x, y) + g(z))
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParenNode {
     pub expression: Box<ExpressionNode>,
@@ -369,6 +465,7 @@ pub struct ParenNode {
 }
 
 impl ParenNode {
+    /// Creates a new ParenNode with the given expression.
     pub fn new(expression: ExpressionNode) -> Self {
         ParenNode {
             expression: Box::new(expression),
@@ -376,6 +473,7 @@ impl ParenNode {
         }
     }
 
+    /// Creates a new ParenNode with the given expression and type.
     pub fn with_type<S>(expression: ExpressionNode, node_type: Vec<S>) -> Self
     where
         S: Into<String>,
@@ -421,6 +519,8 @@ impl Display for ParenNode {
     }
 }
 
+/// The ExpressionNode enum represents different types of expression nodes in the abstract syntax
+/// tree.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ExpressionNode {
     Set(SetNode),
@@ -433,6 +533,12 @@ pub enum ExpressionNode {
 }
 
 impl ExpressionNode {
+    /// Computes the degree of the expression node.
+    ///
+    /// The degree is defined as the number of operations in the expression.
+    ///
+    /// # Returns
+    /// A `u64` representing the degree of the expression node.
     pub fn degree(&self) -> u64 {
         match self {
             ExpressionNode::Set(set_node) => {
@@ -451,6 +557,10 @@ impl ExpressionNode {
         }
     }
 
+    /// Returns the token associated with the expression node.
+    ///
+    /// # Returns
+    /// A `Token` representing the token of the expression node.
     pub fn token(&self) -> Token {
         match &self {
             ExpressionNode::Set(_) => todo!(),
@@ -463,6 +573,10 @@ impl ExpressionNode {
         }
     }
 
+    /// Returns the type of the expression node.
+    ///
+    /// # Returns
+    /// An `Option<Vec<String>>` representing the type of the expression node.
     pub fn node_type(&self) -> Option<Vec<String>> {
         match self {
             ExpressionNode::Set(_) => todo!(),
@@ -475,10 +589,44 @@ impl ExpressionNode {
         }
     }
 
+    /// Computes the distance between two expression nodes.
+    ///
+    /// Right now, this function returns a constant value of 1.
     pub fn distance(&self, _: &Self) -> i32 {
+        // NOTE: This is a placeholder implementation.
         1
     }
 
+    /// Applies a mapping to the expression node.
+    ///
+    /// This function will traverse the expression node and apply the mapping to each sub-node.
+    ///
+    /// # Arguments
+    /// * `mapping` - A mapping from `ExpressionNode` to `ExpressionNode`.
+    ///
+    /// # Returns
+    /// An `Option<ExpressionNode>` which is the result of applying the mapping.
+    ///
+    /// # Note
+    /// If the mapping does not contain a mapping for a specific node, it will return `None`.
+    ///
+    /// # Example
+    /// ```rust
+    /// let mapping: HashMap<ExpressionNode, ExpressionNode> = HashMap::from([(
+    ///     ExpressionNode::Binding(BindingNode::new(
+    ///         Token::with_value(TokenKind::Identifier, "x"),
+    ///         vec![],
+    ///     )),
+    ///     ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42"))),
+    /// )]);
+    ///
+    /// let expr = ExpressionNode::Binding(BindingNode::new(Token::with_value(TokenKind::Identifier, "x"), vec![]));
+    ///
+    /// let result = expr.apply(&mapping);
+    ///
+    /// // assert_eq!(result, Some(ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42")))));
+    /// ```
+    ///
     pub fn apply(
         &self,
         mapping: &HashMap<ExpressionNode, ExpressionNode>,
@@ -616,6 +764,30 @@ impl ExpressionNode {
         }
     }
 
+    /// Creates a mapping from the current expression node to the given expression node.
+    ///
+    /// # Arguments
+    /// * `expr` - The expression node to which the mapping should be created.
+    ///
+    /// # Returns
+    /// An `Option<HashMap<ExpressionNode, ExpressionNode>>` which contains the mapping if it can
+    /// be created, or `None` if it cannot be created.
+    ///
+    /// # Note
+    /// This function will traverse the expression node and create a mapping for each sub-node.
+    ///
+    /// # Example
+    /// ```rust
+    /// let expr1 = ExpressionNode::Binding(BindingNode::new(
+    ///     Token::with_value(TokenKind::Identifier, "x"),
+    ///     vec![],
+    /// ));
+    ///
+    /// let expr2 = ExpressionNode::Number(NumberNode::new(Token::with_value(TokenKind::Number, "42")));
+    ///
+    /// let mapping = expr1.create_mapping(&expr2);
+    ///
+    /// // assert_eq!(mapping, Some(HashMap::from([(expr1, expr2)])));
     pub fn create_mapping(
         &self,
         expr: &ExpressionNode,
@@ -643,6 +815,7 @@ impl Display for ExpressionNode {
     }
 }
 
+/// The RelationKind enum represents the kind of relation used in the abstract syntax tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RelationKind {
     Equality,
@@ -658,6 +831,16 @@ impl Display for RelationKind {
     }
 }
 
+/// The RelationNode represents a relation in the abstract syntax tree.
+///
+/// It contains the kind of relation, a token representing the relation,
+/// and two `ExpressionNode` operands (left and right).
+///
+/// # Example
+/// ```croof
+/// f(x, y) = g(z)
+/// f(x, y) > 42
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RelationNode {
     pub kind: RelationKind,
@@ -667,6 +850,7 @@ pub struct RelationNode {
 }
 
 impl RelationNode {
+    /// Creates a new RelationNode with the given kind, token, left operand, and right operand.
     pub fn new(
         kind: RelationKind,
         token: Token,
@@ -690,6 +874,15 @@ impl Display for RelationNode {
 
 pub type SubstituteFn = Arc<dyn Fn(&ExpressionNode) -> Option<ExpressionNode> + Send + Sync>;
 
+/// The BuiltinNode represents a built-in function or operation in the abstract syntax tree.
+///
+/// It contains a display name for the built-in, and a function that can be used to substitute
+/// the built-in with an expression node.
+///
+/// # Note
+/// The `substitute_fn` is a function that takes an `ExpressionNode` and returns an
+/// `Option<ExpressionNode>`. This type of node should only be added to the AST
+/// after the type checking phase by the compiler.
 #[derive(Clone)]
 pub struct BuiltinNode {
     pub display: String,
@@ -711,6 +904,7 @@ impl PartialEq for BuiltinNode {
 impl Eq for BuiltinNode {}
 
 impl BuiltinNode {
+    /// Creates a new BuiltinNode with the given display name and substitute function.
     pub fn new<S, F>(display: S, substitute_fn: F) -> Self
     where
         S: Into<String>,
@@ -722,6 +916,7 @@ impl BuiltinNode {
         }
     }
 
+    /// Applies the substitute function to the given expression node.
     pub fn apply(&self, expr: &ExpressionNode) -> Option<ExpressionNode> {
         (self.substitute_fn)(expr)
     }
@@ -733,36 +928,12 @@ impl Display for BuiltinNode {
     }
 }
 
+/// The StatementNode enum represents different types of statements in the abstract syntax tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StatementNode {
     Quantifier(QuantifierNode),
     Relation(RelationNode),
     Builtin(BuiltinNode),
-}
-
-impl StatementNode {
-    pub fn create_mapping(
-        &self,
-        expr: &ExpressionNode,
-    ) -> Option<HashMap<ExpressionNode, ExpressionNode>> {
-        match self {
-            StatementNode::Quantifier(_) => todo!("Implement mapping for QuantifierNode"),
-            StatementNode::Relation(node) => expr.create_mapping(&node.left),
-            StatementNode::Builtin(_) => Some(HashMap::new()),
-        }
-    }
-
-    pub fn apply(
-        &self,
-        expression: &ExpressionNode,
-        mapping: &HashMap<ExpressionNode, ExpressionNode>,
-    ) -> Option<ExpressionNode> {
-        match self {
-            StatementNode::Quantifier(_) => todo!("Implement apply for QuantifierNode"),
-            StatementNode::Relation(node) => node.right.apply(mapping),
-            StatementNode::Builtin(node) => node.apply(expression),
-        }
-    }
 }
 
 impl Display for StatementNode {
@@ -775,6 +946,7 @@ impl Display for StatementNode {
     }
 }
 
+/// The ImplicationNode represents an implication in the abstract syntax tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplicationNode {
     pub conditions: Vec<StatementNode>,
@@ -782,6 +954,7 @@ pub struct ImplicationNode {
 }
 
 impl ImplicationNode {
+    /// Creates a new ImplicationNode with the given conditions and conclusion.
     pub fn new(conditions: Vec<StatementNode>, conclusion: Vec<StatementNode>) -> Self {
         ImplicationNode {
             conditions,
@@ -802,6 +975,16 @@ impl Display for ImplicationNode {
     }
 }
 
+/// The DefineFunctionNode represents a function definition in the abstract syntax tree.
+///
+/// It contains a `Token` representing the function name and a `TypeNode` representing the type of
+/// the function.
+///
+/// # Example
+/// ```croof
+/// def f : N -> N -> N
+/// def g : N -> N
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DefineFunctionNode {
     pub symbol: Token,
@@ -809,6 +992,7 @@ pub struct DefineFunctionNode {
 }
 
 impl DefineFunctionNode {
+    /// Creates a new DefineFunctionNode with the given symbol and type node.
     pub fn new(symbol: Token, type_node: TypeNode) -> Self {
         DefineFunctionNode { symbol, type_node }
     }
@@ -820,6 +1004,16 @@ impl Display for DefineFunctionNode {
     }
 }
 
+/// The DefineOperatorNode represents an operator definition in the abstract syntax tree.
+///
+/// It contains a `Token` representing the operator symbol and a `TypeNode` representing the type
+/// of the operator.
+///
+/// # Example
+/// ```croof
+/// def + : N -> N -> N
+/// def * : N -> N -> N
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DefineOperatorNode {
     pub symbol: Token,
@@ -827,6 +1021,7 @@ pub struct DefineOperatorNode {
 }
 
 impl DefineOperatorNode {
+    /// Creates a new DefineOperatorNode with the given symbol and type node.
     pub fn new(symbol: Token, type_node: TypeNode) -> Self {
         DefineOperatorNode { symbol, type_node }
     }
@@ -838,6 +1033,15 @@ impl Display for DefineOperatorNode {
     }
 }
 
+/// The DefineSetNode represents a set definition in the abstract syntax tree.
+///
+/// It contains a `Token` representing the set name and a `SetNode` representing the set itself.
+///
+/// # Example
+/// ```croof
+/// def S = {1, 2, 3}
+/// def T = {}
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DefineSetNode {
     pub symbol: Token,
@@ -845,12 +1049,9 @@ pub struct DefineSetNode {
 }
 
 impl DefineSetNode {
+    /// Creates a new DefineSetNode with the given symbol and set.
     pub fn new(symbol: Token, set: SetNode) -> Self {
         DefineSetNode { symbol, set }
-    }
-
-    pub fn name(symbol: Token) -> Self {
-        DefineSetNode::new(symbol, SetNode::new(vec![]))
     }
 }
 
@@ -866,6 +1067,7 @@ impl Display for DefineSetNode {
     }
 }
 
+/// The DefineNode enum represents different types of definitions in the abstract syntax tree.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DefineNode {
     Function(DefineFunctionNode),
@@ -874,6 +1076,7 @@ pub enum DefineNode {
 }
 
 impl DefineNode {
+    /// Get the symbol of the define node.
     pub fn symbol(&self) -> Token {
         match self {
             DefineNode::Function(node) => node.symbol.clone(),
@@ -893,6 +1096,21 @@ impl Display for DefineNode {
     }
 }
 
+/// The ProgramNode represents the entire program in the abstract syntax tree.
+///
+/// It contains a vector of `DefineNode` for function, operator, and set definitions,
+/// a vector of `ImplicationNode` for implications, and a vector of `ExpressionNode` for
+/// evaluations.
+///
+/// # Example
+/// ```croof
+/// def f : N -> N -> N
+/// def g : N -> N
+///
+/// f(x, y) => g(x) + g(y)
+///
+/// eval f(1, 2)
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ProgramNode {
     pub defines: Vec<DefineNode>,
@@ -901,6 +1119,7 @@ pub struct ProgramNode {
 }
 
 impl ProgramNode {
+    /// Creates a new ProgramNode with the given defines, implications, and evaluations.
     pub fn new(
         defines: Vec<DefineNode>,
         implications: Vec<ImplicationNode>,
@@ -913,6 +1132,15 @@ impl ProgramNode {
         }
     }
 
+    /// Merges another ProgramNode into this one by extending the defines, implications, and
+    /// evaluations.
+    ///
+    /// # Arguments
+    /// * `other` - The ProgramNode to merge into this one.
+    ///
+    /// # Note
+    /// This function will extend the current node's defines, implications, and evaluations
+    /// with the ones from the other node.
     pub fn merge(&mut self, other: ProgramNode) {
         self.defines.extend(other.defines);
         self.implications.extend(other.implications);
@@ -939,6 +1167,7 @@ impl Display for ProgramNode {
 }
 
 impl Parser {
+    /// Creates a new Parser with the given lexer and sourcemap.
     pub fn new(lexer: Lexer, sourcemap: &SourceMap) -> Self {
         let mut parser = Parser {
             lexer,
@@ -1304,6 +1533,16 @@ impl Parser {
         }
     }
 
+    /// Parses the entire program and returns a `ProgramNode`.
+    ///
+    /// # Returns
+    /// A `Result<ProgramNode, ParserError>` which contains the parsed program node if successful,
+    /// or a `ParserError` if an error occurred during parsing.
+    ///
+    /// # Note
+    /// This function will read tokens from the lexer until it reaches the end of the file (EOF).
+    /// It will parse definitions, implications, and evaluations in the order they appear in the
+    /// source code.
     pub fn parse(&mut self) -> Result<ProgramNode, ParserError> {
         let mut defines = Vec::new();
         let mut implications = Vec::new();

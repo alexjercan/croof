@@ -3,8 +3,10 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 
-const EOF: char = '\0';
+/// End of File character, used to indicate the end of input
+pub const EOF: char = '\0';
 
+/// TokenKind represents the different types of tokens that can be recognized by the lexer.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum TokenKind {
     Eof,
@@ -31,8 +33,11 @@ pub enum TokenKind {
     Def,
 }
 
+/// Token represents a single token in the source code, including its kind, value, position, and
+/// source ID.
 #[derive(Debug, Clone, Default)]
 pub struct Token {
+    /// The kind of the token, which determines its type (e.g., identifier, number, operator).
     pub kind: TokenKind,
     value: Option<String>,
 
@@ -87,6 +92,7 @@ impl Display for Token {
 }
 
 impl Token {
+    /// Creates a new Token with the specified kind and default values for position and source ID.
     pub fn new(kind: TokenKind) -> Self {
         Token {
             kind,
@@ -96,6 +102,7 @@ impl Token {
         }
     }
 
+    /// Creates a new Token with the specified kind and value, setting position and source ID to 0.
     pub fn with_value<S>(kind: TokenKind, value: S) -> Self
     where
         S: Into<String>,
@@ -108,11 +115,13 @@ impl Token {
         }
     }
 
+    /// Get the value of the token as a string.
     pub fn value(&self) -> String {
         self.value.as_deref().unwrap_or("?").to_string()
     }
 }
 
+/// Lexer is responsible for tokenizing the input source code into a stream of tokens.
 #[derive(Debug, Clone)]
 pub struct Lexer {
     source_id: usize,
@@ -250,6 +259,7 @@ impl Lexer {
         Token::with_value(TokenKind::Literal, value)
     }
 
+    /// Creates a new Lexer instance with the given source file.
     pub fn new(file: SourceFile) -> Self {
         let mut lexer = Lexer {
             source_id: file.id,
@@ -264,6 +274,22 @@ impl Lexer {
         lexer
     }
 
+    /// Returns the next token from the input, skipping whitespace and comments.
+    ///
+    /// This method reads characters from the input string, identifies the type of token
+    /// being read (such as identifiers, numbers, operators, etc.), and returns a `Token` object
+    /// representing the token. It handles various token types, including literals, operators,
+    /// parentheses, and special symbols. It also skips whitespace and comments in the input.
+    ///
+    /// # Returns
+    /// A `Token` object representing the next token in the input stream. If the end of the input
+    /// is reached, it returns a token of kind `TokenKind::Eof`. If an illegal character is
+    /// encountered, it returns a token of kind `TokenKind::Illegal` with the character as its
+    /// value.
+    ///
+    /// # Notes
+    /// * This method is designed to be called repeatedly to retrieve tokens one by one from the
+    /// input.
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
@@ -319,6 +345,11 @@ impl Lexer {
         token
     }
 
+    /// Displays all tokens from the lexer, formatted with their source positions.
+    ///
+    /// This method iterates through the tokens produced by the lexer, printing each token's
+    /// position in the source code and its string representation. It continues until it reaches
+    /// the end of the input (EOF) token.
     pub fn display_tokens(&self, sourcemap: &SourceMap) {
         let mut lexer = self.clone();
 
@@ -334,14 +365,20 @@ impl Lexer {
     }
 }
 
+/// SourceFile represents a source file in the source map, containing its ID, filename, and
+/// content.
 #[derive(Debug, Clone, Default)]
 pub struct SourceFile {
+    /// Unique identifier for the source file
     pub id: usize,
+    /// The name of the source file, which can be a path or "<stdin>" for standard input
     pub filename: String,
+    /// The content of the source file as a string
     pub content: String,
 }
 
 impl SourceFile {
+    /// Creates a new SourceFile with the given ID, filename, and content.
     pub fn new(id: usize, filename: String, content: String) -> Self {
         SourceFile {
             id,
@@ -350,6 +387,18 @@ impl SourceFile {
         }
     }
 
+    /// Converts a character position in the content to a line and column number.
+    ///
+    /// This method takes a character position (index) in the content string and calculates
+    /// the corresponding line and column numbers. It iterates through the content, counting
+    /// new lines to determine the line number and counting characters to determine the column
+    /// number.
+    ///
+    /// # Arguments
+    /// * `pos` - The character position in the content string.
+    ///
+    /// # Returns
+    /// A tuple `(line, col)` where `line` is the line number (1-based) and `col` is the column
     pub fn pos_to_lc(&self, pos: usize) -> (usize, usize) {
         let mut line = 1;
         let mut col = 1;
@@ -370,12 +419,32 @@ impl SourceFile {
     }
 }
 
+/// SourceMap is a collection of source files, allowing for the management and retrieval of
+/// source files and their tokens.
 #[derive(Debug, Clone, Default)]
 pub struct SourceMap {
+    /// A vector of source files, each represented by a SourceFile struct
     pub files: Vec<SourceFile>,
 }
 
 impl SourceMap {
+    /// Adds a new source file to the source map, reading its content from the specified filename.
+    ///
+    /// This method takes an optional filename, reads the content of the file, and creates a new
+    /// SourceFile instance with a unique ID. If no filename is provided, it reads from standard
+    /// input.
+    ///
+    /// # Arguments
+    /// * `filename` - An optional string representing the filename to read. If `None`, it reads
+    /// from standard input.
+    ///
+    /// # Returns
+    /// A `Result` containing a `Lexer` instance initialized with the new source file, or an
+    /// `io::Error` if reading the file fails.
+    ///
+    /// # Notes
+    /// * The ID of the new source file is the current length of the `files` vector, ensuring
+    /// that each file has a unique ID.
     pub fn add_file<S>(&mut self, filename: Option<S>) -> io::Result<Lexer>
     where
         S: Into<String>,
@@ -394,6 +463,18 @@ impl SourceMap {
         Ok(Lexer::new(self.files[id].clone()))
     }
 
+    /// Formats the position of a token in the source file as a string.
+    ///
+    /// This method takes a `Token` and retrieves the corresponding source file from the source
+    /// map. It then converts the token's position to a line and column number using the
+    /// `pos_to_lc` method of the `SourceFile`. Finally, it formats the position as a string
+    /// in the format "filename:line:column".
+    ///
+    /// # Arguments
+    /// * `token` - A reference to a `Token` whose position is to be formatted.
+    ///
+    /// # Returns
+    /// A `String` representing the position of the token in the format
     pub fn format_pos(&self, token: &Token) -> String {
         let file = self
             .files
