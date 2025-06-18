@@ -316,7 +316,7 @@ impl Lexer {
     ///
     /// # Notes
     /// * This method is designed to be called repeatedly to retrieve tokens one by one from the
-    /// input.
+    ///     input.
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
@@ -458,7 +458,7 @@ impl SourceMap {
     ///
     /// # Arguments
     /// * `filename` - An optional string representing the filename to read. If `None`, it reads
-    /// from standard input.
+    ///     from standard input.
     ///
     /// # Returns
     /// A `Result` containing a `Lexer` instance initialized with the new source file, or an
@@ -466,7 +466,7 @@ impl SourceMap {
     ///
     /// # Notes
     /// * The ID of the new source file is the current length of the `files` vector, ensuring
-    /// that each file has a unique ID.
+    ///     that each file has a unique ID.
     pub fn add_file<S>(&mut self, filename: Option<S>) -> io::Result<Lexer>
     where
         S: Into<String>,
@@ -528,7 +528,7 @@ impl SourceMap {
     ///
     /// # Arguments
     /// * `error` - A reference to an object that implements the `Debug`, `Display`, and
-    /// `WithToken` traits.
+    ///     `WithToken` traits.
     ///
     /// # Notes
     /// This function uses the `format_error` method of the `SourceMap` to format the error message
@@ -544,7 +544,7 @@ impl SourceMap {
     ///
     /// # Arguments
     /// * `errors` - A slice of objects that implement the `Debug`, `Display`, and `WithToken`
-    /// traits.
+    ///     traits.
     ///
     /// # Notes
     /// This function iterates over the provided errors and calls `display_error` for each one,
@@ -2523,7 +2523,7 @@ impl Typechecker {
     ///
     /// # Notes
     /// * This function initializes the typechecker with built-in types and functions such as `N`,
-    /// `Z`, `succ`, and `neg`.
+    ///     `Z`, `succ`, and `neg`.
     /// * It also checks for redefinitions of user-defined types, functions, and operators.
     pub fn new(defines: Vec<DefineNode>) -> (Self, Vec<TypecheckerError>) {
         let mut mapping: HashMap<String, HashMap<Vec<String>, DefineNode>> = HashMap::new();
@@ -2929,7 +2929,7 @@ impl Typechecker {
     /// A tuple containing:
     /// * An `Option<Vec<String>>` representing the type of the expression if it can be determined,
     /// * a `Vec<TypecheckerError>` containing any errors encountered during the type checking
-    /// process.
+    ///     process.
     pub fn check_expression(
         &self,
         expression: &mut ExpressionNode,
@@ -3071,6 +3071,7 @@ pub fn typecheck(ast: &mut ProgramNode) -> Vec<TypecheckerError> {
 
 /// Matcher is a utility for matching expressions against implications
 /// and performing substitutions based on those implications.
+#[derive(Debug, Clone, Default)]
 pub struct Matcher {}
 
 impl Matcher {
@@ -3294,7 +3295,7 @@ impl AstarSolver {
 
         for implication in &self.implications {
             for (substituted, steps) in self.matcher.substitute(expression, implication) {
-                if let Some(steps) = self.prove(&steps).ok() {
+                if let Ok(steps) = self.prove(&steps) {
                     substitutions.push((substituted, implication.clone(), steps));
                 }
             }
