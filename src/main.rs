@@ -1,8 +1,8 @@
 use clap::Parser as ArgParser;
-use std::{collections::HashMap, process::ExitCode};
+use std::process::ExitCode;
 
 use croof::{
-    lexer::SourceMap, matcher::Matcher, parser::{Parser, ProgramNode}, solver::{AstarSolver, Solver}, typechecker::{builtin_implications, Typechecker}
+    display_solution, parse, typecheck, AstarSolver, Matcher, ProgramNode, Solver, SourceMap,
 };
 
 #[derive(ArgParser, Debug)]
@@ -23,29 +23,38 @@ struct Args {
     typecheck: bool,
 }
 
+fn display_tokens(files: Vec<String>) {
+    let mut sourcemap = SourceMap::default();
+
+    for file in files {
+        let lexer = sourcemap
+            .add_file(Some(file))
+            .expect("Failed to create lexer");
+
+        for token in lexer.into_iter() {
+            sourcemap.display_token(&token);
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args = Args::parse();
+    if args.lexer {
+        display_tokens(args.files);
+        return ExitCode::SUCCESS;
+    }
+
+    let mut ast = ProgramNode::default();
     let mut sourcemap = SourceMap::default();
-    let mut ast: ProgramNode = ProgramNode::default();
 
     for file in args.files {
         let lexer = sourcemap
             .add_file(Some(file))
             .expect("Failed to create lexer");
 
-        if args.lexer {
-            lexer.display_tokens(&sourcemap);
-            continue;
-        }
-
-        let mut parser = Parser::new(lexer, &sourcemap);
-        let program = parser.parse().expect("Failed to parse input");
+        let program = parse(lexer, &sourcemap).expect("Failed to parse input");
 
         ast.merge(program);
-    }
-
-    if args.lexer {
-        return ExitCode::SUCCESS;
     }
 
     if args.parser {
@@ -53,20 +62,9 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let (typechecker, mut errors) = Typechecker::new(ast.defines.clone(), &sourcemap);
-
-    for implication in &mut ast.implications {
-        errors.extend(typechecker.check_implication(implication));
-    }
-    ast.implications.extend(builtin_implications());
-
-    for eval in &mut ast.evaluations {
-        let (_, eval_errors) = typechecker.check_expression(eval, &HashMap::default());
-        errors.extend(eval_errors);
-    }
-
+    let errors = typecheck(&mut ast);
     if !errors.is_empty() {
-        typechecker.display_errors(&errors);
+        sourcemap.display_errors(&errors);
         eprintln!(
             "Typechecking failed with {} {}",
             errors.len(),
@@ -80,13 +78,11 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let matcher = Matcher::new();
-    let solver = AstarSolver::new(matcher, ast.implications.clone());
-
+    let solver = AstarSolver::new(Matcher::new(), ast.implications.clone());
     for expression in &ast.evaluations {
         match solver.solve(expression) {
             Ok((steps, result)) => {
-                solver.display_solution(expression, &steps, &result);
+                display_solution(expression, &steps, &result);
             }
             Err(e) => eprintln!("Error solving expression: {:?}", e),
         }
@@ -94,5 +90,3 @@ fn main() -> ExitCode {
 
     ExitCode::SUCCESS
 }
-
-// TODO: How to actually compare ExpressionNode?
