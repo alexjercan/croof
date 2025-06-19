@@ -1,9 +1,7 @@
 use clap::Parser as ArgParser;
 use std::process::ExitCode;
 
-use croof::{
-    display_solution, parse, typecheck, AstarSolver, Matcher, ProgramNode, Solver, SourceMap,
-};
+use croof::prelude::*;
 
 #[derive(ArgParser, Debug)]
 #[command(version, about, long_about = None)]
@@ -37,6 +35,14 @@ fn display_tokens(files: Vec<String>) {
     }
 }
 
+pub fn display_solution(expression: &ExpressionNode, steps: &[ProofStep], result: &ExpressionNode) {
+    println!("Expression: {}", expression);
+    for (parent, target, implication) in steps {
+        println!("  - {} => {} (apply {})", parent, target, implication);
+    }
+    println!("Result: {}", result);
+}
+
 fn main() -> ExitCode {
     let args = Args::parse();
     if args.lexer {
@@ -52,7 +58,7 @@ fn main() -> ExitCode {
             .add_file(Some(file))
             .expect("Failed to create lexer");
 
-        let program = parse(lexer, &sourcemap).expect("Failed to parse input");
+        let program = Parser::new(lexer, &sourcemap).parse().expect("Failed to parse input");
 
         ast.merge(program);
     }
@@ -62,7 +68,8 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let errors = typecheck(&mut ast);
+    let mut typechecker = Typechecker::new();
+    let errors = typechecker.check_program(&mut ast);
     if !errors.is_empty() {
         sourcemap.display_errors(&errors);
         eprintln!(
@@ -90,3 +97,9 @@ fn main() -> ExitCode {
 
     ExitCode::SUCCESS
 }
+
+// TODO: Allow eval expression to contain statements (quantifiers, relations, etc.) and then have
+// the expression to be solved
+// Example: `eval forall a : N, a + a`
+// Then we have some steps.... and then
+// Result: 2 * a
