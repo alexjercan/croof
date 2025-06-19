@@ -58,7 +58,9 @@ fn main() -> ExitCode {
             .add_file(Some(file))
             .expect("Failed to create lexer");
 
-        let program = Parser::new(lexer, &sourcemap).parse().expect("Failed to parse input");
+        let program = Parser::new(lexer, &sourcemap)
+            .parse()
+            .expect("Failed to parse input");
 
         ast.merge(program);
     }

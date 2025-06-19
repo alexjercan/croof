@@ -1,5 +1,5 @@
 pub mod prelude {
-    pub use super::SourceFile;
+    pub use super::*;
 }
 
 /// SourceFile represents a source file in the source map, containing its ID, filename, and

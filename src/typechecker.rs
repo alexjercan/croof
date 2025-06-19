@@ -1,10 +1,20 @@
 pub mod prelude {
-    pub use super::Typechecker;
+    pub use super::{Typechecker, TypecheckerError, FUNCTION_NEG, FUNCTION_SUCC, TYPE_N, TYPE_Z};
 }
 
-use std::{collections::{hash_map, HashMap}, fmt::Display};
+use std::{
+    collections::{hash_map, HashMap},
+    fmt::Display,
+};
 
-use crate::{ast::{BindingNode, BuiltinNode, DefineFunctionNode, DefineNode, DefineSetNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, ProgramNode, QuantifierNode, RelationNode, SetNode, StatementNode, TypeNode}, token::{Token, TokenKind, WithToken}};
+use crate::{
+    ast::{
+        BindingNode, BuiltinNode, DefineFunctionNode, DefineNode, DefineSetNode, ExpressionNode,
+        ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, ProgramNode,
+        QuantifierNode, RelationNode, SetNode, StatementNode, TypeNode,
+    },
+    token::{Token, TokenKind, WithToken},
+};
 
 /// Constants for built-in types and functions
 pub const TYPE_N: &str = "N";
@@ -117,13 +127,7 @@ impl Display for TypecheckerError {
     }
 }
 
-/// Returns a list of built-in implications that can be used for type checking and inference.
-/// This function provides a set of common implications that are used in the type checking process
-/// to infer types and validate expressions.
-///
-/// # Returns
-/// A vector of `ImplicationNode` instances representing built-in implications.
-pub fn builtin_implications() -> Vec<ImplicationNode> {
+fn builtin_implications() -> Vec<ImplicationNode> {
     vec![
         // forall a : N => a = succ(a - 1)
         ImplicationNode::new(
@@ -326,8 +330,7 @@ pub fn builtin_implications() -> Vec<ImplicationNode> {
                 "forall a : N => neg(a) = -a",
                 |expression| {
                     if let ExpressionNode::Binding(expr_node) = expression {
-                        if expr_node.name.value() == FUNCTION_NEG
-                        {
+                        if expr_node.name.value() == FUNCTION_NEG {
                             if let ExpressionNode::Number(number_node) = &expr_node.arguments[0] {
                                 if let Some(TYPE_N) = number_node
                                     .node_type
@@ -362,8 +365,7 @@ pub fn builtin_implications() -> Vec<ImplicationNode> {
                 "forall a : Z => neg(a) = -a",
                 |expression| {
                     if let ExpressionNode::Binding(expr_node) = expression {
-                        if expr_node.name.value() == FUNCTION_NEG
-                        {
+                        if expr_node.name.value() == FUNCTION_NEG {
                             if let ExpressionNode::Number(number_node) = &expr_node.arguments[0] {
                                 if let Some(TYPE_Z) = number_node
                                     .node_type
@@ -463,13 +465,18 @@ fn builtin_mapping() -> HashMap<String, HashMap<Vec<String>, DefineNode>> {
         )]),
     );
 
-    return mapping;
+    mapping
 }
-
 
 /// Typechecker is responsible for checking types of expressions and statements in the program.
 pub struct Typechecker {
     mapping: HashMap<String, HashMap<Vec<String>, DefineNode>>,
+}
+
+impl Default for Typechecker {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Typechecker {
@@ -847,8 +854,7 @@ impl Typechecker {
         match &define {
             DefineNode::Function(node) => {
                 let (_, arg_types) = node.type_node.types.split_last().unwrap();
-                let arg_types: Vec<String> =
-                    arg_types.iter().map(|token| token.value()).collect();
+                let arg_types: Vec<String> = arg_types.iter().map(|token| token.value()).collect();
 
                 if self
                     .mapping
@@ -857,8 +863,7 @@ impl Typechecker {
                 {
                     errors.push(TypecheckerError::RedefinedBinding(symbol));
                 } else {
-                    self
-                        .mapping
+                    self.mapping
                         .entry(name.clone())
                         .or_default()
                         .insert(arg_types, define.clone());
@@ -876,8 +881,7 @@ impl Typechecker {
                 {
                     errors.push(TypecheckerError::RedefinedOperator(symbol));
                 } else {
-                    self
-                        .mapping
+                    self.mapping
                         .entry(name.clone())
                         .or_default()
                         .insert(arg_types, define.clone());
@@ -887,8 +891,7 @@ impl Typechecker {
                 if self.mapping.contains_key(&name) {
                     errors.push(TypecheckerError::RedefinedType(symbol));
                 } else {
-                    self
-                        .mapping
+                    self.mapping
                         .entry(name.clone())
                         .or_default()
                         .insert(vec![], define.clone());

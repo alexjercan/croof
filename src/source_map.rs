@@ -2,9 +2,17 @@ pub mod prelude {
     pub use super::SourceMap;
 }
 
-use std::{io, fmt::{Debug, Display}};
+use std::{
+    fmt::{Debug, Display},
+    io,
+};
 
-use crate::{lexer::Lexer, source_file::SourceFile, token::{Token, WithToken}, util::read_input};
+use crate::{
+    lexer::Lexer,
+    source_file::SourceFile,
+    token::{Token, WithToken},
+    util::read_input,
+};
 
 /// SourceMap is a collection of source files, allowing for the management and retrieval of
 /// source files and their tokens.
@@ -87,7 +95,11 @@ impl SourceMap {
     where
         T: Debug + Display + Clone + WithToken,
     {
-        eprintln!("{}, {}", self.format_pos(&error.token()), &error.to_string());
+        eprintln!(
+            "{}, {}",
+            self.format_pos(&error.token()),
+            &error.to_string()
+        );
     }
 
     /// Display a list of errors, formatting each error with its token's position.

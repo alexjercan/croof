@@ -1,4 +1,7 @@
-use std::{fs::File, io::{self, Read}};
+use std::{
+    fs::File,
+    io::{self, Read},
+};
 
 /// Reads the input from a file or standard input.
 pub(crate) fn read_input(path: Option<String>) -> io::Result<String> {

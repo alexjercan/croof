@@ -2,7 +2,10 @@ pub mod prelude {
     pub use super::Lexer;
 }
 
-use crate::{source_file::SourceFile, token::{Token, TokenKind, EOF}};
+use crate::{
+    source_file::SourceFile,
+    token::{Token, TokenKind, EOF},
+};
 
 /// Lexer is responsible for tokenizing the input source code into a stream of tokens.
 #[derive(Debug, Clone)]

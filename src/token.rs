@@ -1,5 +1,5 @@
 pub mod prelude {
-    pub use super::{Token, TokenKind};
+    pub use super::{Token, TokenKind, EOF};
 }
 
 use std::fmt::{Debug, Display};

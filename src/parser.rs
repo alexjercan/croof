@@ -1,10 +1,20 @@
 pub mod prelude {
-    pub use super::Parser;
+    pub use super::{Parser, ParserError};
 }
 
 use std::fmt::{Debug, Display};
 
-use crate::{ast::{BindingNode, DefineFunctionNode, DefineNode, DefineOperatorNode, DefineSetNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, ProgramNode, QuantifierKind, QuantifierNode, RelationKind, RelationNode, SetNode, StatementNode, TypeNode}, lexer::Lexer, source_map::SourceMap, token::{Token, TokenKind}};
+use crate::{
+    ast::{
+        BindingNode, DefineFunctionNode, DefineNode, DefineOperatorNode, DefineSetNode,
+        ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode,
+        ProgramNode, QuantifierKind, QuantifierNode, RelationKind, RelationNode, SetNode,
+        StatementNode, TypeNode,
+    },
+    lexer::Lexer,
+    source_map::SourceMap,
+    token::{Token, TokenKind},
+};
 
 /// Represents a parser error.
 #[derive(Debug, Clone, PartialEq, Eq)]

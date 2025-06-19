@@ -1,8 +1,17 @@
 pub mod prelude {
-    pub use super::*;
+    pub use super::{
+        BindingNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode,
+        ParenNode, ProgramNode, QuantifierKind, QuantifierNode, RelationKind, SetNode,
+        StatementNode, TypeNode,
+    };
 }
 
-use std::{hash::{Hash, Hasher}, collections::HashMap, fmt::{Debug, Display}, sync::Arc};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
 
 use crate::token::{Token, TokenKind};
 
@@ -354,8 +363,7 @@ impl Ord for BindingNode {
 
 impl PartialEq for BindingNode {
     fn eq(&self, other: &Self) -> bool {
-        self.name.value() == other.name.value()
-            && self.arguments == other.arguments
+        self.name.value() == other.name.value() && self.arguments == other.arguments
     }
 }
 
@@ -664,7 +672,7 @@ impl ExpressionNode {
     /// # Example
     /// ```rust
     /// use std::collections::HashMap;
-    /// use croof::{ExpressionNode, BindingNode, NumberNode, Token, TokenKind};
+    /// use croof::prelude::*;
     ///
     /// let mapping: HashMap<ExpressionNode, ExpressionNode> = HashMap::from([(
     ///     ExpressionNode::Binding(BindingNode::new(
@@ -821,7 +829,7 @@ impl ExpressionNode {
     ///
     /// # Example
     /// ```rust
-    /// use croof::{ExpressionNode, BindingNode, NumberNode, Token, TokenKind};
+    /// use croof::prelude::*;
     /// use std::collections::HashMap;
     ///
     /// let expr1 = ExpressionNode::Binding(BindingNode::new(

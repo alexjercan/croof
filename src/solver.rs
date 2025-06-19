@@ -1,10 +1,13 @@
 pub mod prelude {
-    pub use super::{AstarSolver, Solver, ProofStep};
+    pub use super::{AstarSolver, ProofStep, Solver};
 }
 
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
-use crate::{ast::{ExpressionNode, ImplicationNode, RelationKind, StatementNode}, matcher::Matcher};
+use crate::{
+    ast::{ExpressionNode, ImplicationNode, RelationKind, StatementNode},
+    matcher::Matcher,
+};
 
 /// ProofStep represents a step in a proof, consisting of an expression, its substitution, and the
 /// implication used.
@@ -227,7 +230,7 @@ impl Solver for AstarSolver {
 mod test {
     use std::collections::HashMap;
 
-    use crate::{ast::{BindingNode, ExpressionNode, NumberNode, OperatorNode, ParenNode}, token::{Token, TokenKind}, typechecker::TYPE_N};
+    use crate::prelude::*;
 
     #[test]
     fn test_create_mapping_number_number() {
