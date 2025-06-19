@@ -12,20 +12,27 @@ use crate::{
         StatementNode, TypeNode,
     },
     lexer::Lexer,
-    source_map::SourceMap,
-    token::{Token, TokenKind},
+    token::{Token, TokenKind, WithToken},
 };
 
 /// Represents a parser error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserError {
-    Todo(String),
+    Expected(String, Token),
+}
+
+impl WithToken for ParserError {
+    fn token(&self) -> Token {
+        match self {
+            ParserError::Expected(_, token) => token.clone(),
+        }
+    }
 }
 
 impl Display for ParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParserError::Todo(msg) => write!(f, "TODO: {}", msg),
+            ParserError::Expected(msg, token) => write!(f, "Expected: {}, found: {}", msg, token),
         }
     }
 }
@@ -38,17 +45,15 @@ impl Display for ParserError {
 /// parsing operations.
 pub struct Parser {
     lexer: Lexer,
-    sourcemap: SourceMap,
     token: Token,
     next_token: Token,
 }
 
 impl Parser {
     /// Creates a new Parser with the given lexer and sourcemap.
-    pub fn new(lexer: Lexer, sourcemap: &SourceMap) -> Self {
+    pub fn new(lexer: Lexer) -> Self {
         let mut parser = Parser {
             lexer,
-            sourcemap: sourcemap.clone(),
             token: Token::default(),
             next_token: Token::default(),
         };
@@ -72,11 +77,7 @@ impl Parser {
 
         loop {
             if self.token.kind != TokenKind::Type {
-                return Err(ParserError::Todo(format!(
-                    "{}, Expected type, found {:?}",
-                    self.sourcemap.format_pos(&self.token),
-                    self.token.kind
-                )));
+                return Err(ParserError::Expected("type".to_string(), self.token.clone()));
             }
             let type_node = self.token.clone();
             self.read();
@@ -98,12 +99,11 @@ impl Parser {
         let kind = match &self.token.kind {
             TokenKind::Forall => QuantifierKind::Forall,
             TokenKind::Exists => QuantifierKind::Exists,
-            otherwise => {
-                return Err(ParserError::Todo(format!(
-                    "{}, Expected quantifier (forall or exists), found {:?}",
-                    self.sourcemap.format_pos(&self.token),
-                    otherwise
-                )));
+            _ => {
+                return Err(ParserError::Expected(
+                    "quantifier (forall or exists)".to_string(),
+                    self.token.clone(),
+                ));
             }
         };
         self.read();
@@ -111,22 +111,20 @@ impl Parser {
         let symbol = match &self.token.kind {
             TokenKind::Identifier => self.token.clone(),
             TokenKind::Operator => self.token.clone(),
-            otherwise => {
-                return Err(ParserError::Todo(format!(
-                    "{}, Expected identifier after quantifier, found {:?}",
-                    self.sourcemap.format_pos(&self.token),
-                    otherwise
-                )));
+            _ => {
+                return Err(ParserError::Expected(
+                    "identifier or operator after quantifier".to_string(),
+                    self.token.clone(),
+                ));
             }
         };
         self.read();
 
         if self.token.kind != TokenKind::Colon {
-            return Err(ParserError::Todo(format!(
-                "{}, Expected ':' after variable, found {:?}",
-                self.sourcemap.format_pos(&self.token),
-                self.token.kind
-            )));
+            return Err(ParserError::Expected(
+                "':' after variable".to_string(),
+                self.token.clone(),
+            ));
         }
         self.read();
 
@@ -156,21 +154,16 @@ impl Parser {
                         self.read();
                         break;
                     } else {
-                        return Err(ParserError::Todo(format!(
-                            "{}, Expected ',' or '}}', found {:?}",
-                            self.sourcemap.format_pos(&self.token),
-                            self.token.kind
-                        )));
+                        return Err(ParserError::Expected(
+                            "',' or right '}'".to_string(),
+                            self.token.clone(),
+                        ));
                     }
                 }
 
                 Ok(SetNode::new(elements))
             }
-            otherwise => Err(ParserError::Todo(format!(
-                "{}, Expected set, found {:?}",
-                self.sourcemap.format_pos(&self.token),
-                otherwise
-            ))),
+            _ => Err(ParserError::Expected("set".to_string(), self.token.clone())),
         }
     }
 
@@ -209,11 +202,10 @@ impl Parser {
                             } else if self.token.kind == TokenKind::Comma {
                                 self.read();
                             } else {
-                                return Err(ParserError::Todo(format!(
-                                    "{}, Expected ',' or ')', found {:?}",
-                                    self.sourcemap.format_pos(&self.token),
-                                    self.token.kind
-                                )));
+                                return Err(ParserError::Expected(
+                                    "',' or ')'".to_string(),
+                                    self.token.clone(),
+                                ));
                             }
                         }
                         arguments
@@ -228,22 +220,20 @@ impl Parser {
                 let expr = self.parse_expression()?;
 
                 if self.token.kind != TokenKind::RParen {
-                    return Err(ParserError::Todo(format!(
-                        "{}, Expected ')', found {:?}",
-                        self.sourcemap.format_pos(&self.token),
-                        self.token.kind
-                    )));
+                    return Err(ParserError::Expected(
+                        "')'".to_string(),
+                        self.token.clone(),
+                    ));
                 }
                 self.read();
 
                 ExpressionNode::Paren(ParenNode::new(expr))
             }
-            otherwise => {
-                return Err(ParserError::Todo(format!(
-                    "{}, Expected expression, found {:?}",
-                    self.sourcemap.format_pos(&self.token),
-                    otherwise
-                )));
+            _ => {
+                return Err(ParserError::Expected(
+                    "expression".to_string(),
+                    self.token.clone(),
+                ));
             }
         };
 
@@ -276,12 +266,11 @@ impl Parser {
                 self.read();
                 RelationKind::GreaterThan
             }
-            otherwise => {
-                return Err(ParserError::Todo(format!(
-                    "{}, Expected '=', found {:?}",
-                    self.sourcemap.format_pos(&self.token),
-                    otherwise
-                )));
+            _ => {
+                return Err(ParserError::Expected(
+                    "relation operator (e.g., '=', '>', etc.)".to_string(),
+                    token,
+                ));
             }
         };
 
@@ -352,11 +341,10 @@ impl Parser {
                 self.read();
 
                 if self.token.kind != TokenKind::Colon {
-                    return Err(ParserError::Todo(format!(
-                        "{}, Expected ':' after identifier, found {:?}",
-                        self.sourcemap.format_pos(&self.token),
-                        self.token.kind
-                    )));
+                    return Err(ParserError::Expected(
+                        "':' after identifier".to_string(),
+                        self.token.clone(),
+                    ));
                 }
                 self.read();
 
@@ -371,11 +359,10 @@ impl Parser {
                 self.read();
 
                 if self.token.kind != TokenKind::Colon {
-                    return Err(ParserError::Todo(format!(
-                        "{}, Expected ':' after operator, found {:?}",
-                        self.sourcemap.format_pos(&self.token),
-                        self.token.kind
-                    )));
+                    return Err(ParserError::Expected(
+                        "':' after operator".to_string(),
+                        self.token.clone(),
+                    ));
                 }
                 self.read();
 
@@ -390,11 +377,10 @@ impl Parser {
                 self.read();
 
                 if self.token.kind != TokenKind::Equal {
-                    return Err(ParserError::Todo(format!(
-                        "{}, Expected '=' after type, found {:?}",
-                        self.sourcemap.format_pos(&self.token),
-                        self.token.kind
-                    )));
+                    return Err(ParserError::Expected(
+                        "'=' after type".to_string(),
+                        self.token.clone(),
+                    ));
                 }
                 self.read();
 
@@ -402,11 +388,10 @@ impl Parser {
 
                 Ok(DefineNode::Set(DefineSetNode::new(symbol, set)))
             }
-            otherwise => Err(ParserError::Todo(format!(
-                "{}, Expected type, identifier or operator, found {:?}",
-                self.sourcemap.format_pos(&self.token),
-                otherwise
-            ))),
+            _ => Err(ParserError::Expected(
+                "type, identifier or operator".to_string(),
+                self.token.clone(),
+            )),
         }
     }
 

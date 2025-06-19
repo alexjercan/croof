@@ -55,14 +55,17 @@ fn main() -> ExitCode {
 
     for file in args.files {
         let lexer = sourcemap
-            .add_file(Some(file))
+            .add_file(Some(&file))
             .expect("Failed to create lexer");
 
-        let program = Parser::new(lexer, &sourcemap)
-            .parse()
-            .expect("Failed to parse input");
-
-        ast.merge(program);
+        match Parser::new(lexer).parse() {
+            Ok(program) => ast.merge(program),
+            Err(error) => {
+                sourcemap.display_error(&error);
+                eprintln!("Failed to parse file: {}", file);
+                return ExitCode::FAILURE;
+            }
+        }
     }
 
     if args.parser {
