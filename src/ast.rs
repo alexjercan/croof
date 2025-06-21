@@ -1,8 +1,8 @@
 pub mod prelude {
     pub use super::{
-        BindingNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode,
-        ParenNode, ProgramNode, QuantifierKind, QuantifierNode, RelationKind, SetNode,
-        StatementNode, TypeNode, EvaluationNode,
+        BindingNode, EvaluationNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode,
+        OperatorNode, ParenNode, ProgramNode, QuantifierKind, QuantifierNode, RelationKind,
+        SetNode, StatementNode, TypeNode,
     };
 }
 
@@ -1168,7 +1168,10 @@ pub struct EvaluationNode {
 impl EvaluationNode {
     /// Creates a new EvaluationNode with the given conditions and expression.
     pub fn new(conditions: Vec<StatementNode>, expression: ExpressionNode) -> Self {
-        EvaluationNode { conditions, expression }
+        EvaluationNode {
+            conditions,
+            expression,
+        }
     }
 }
 

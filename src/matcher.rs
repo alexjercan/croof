@@ -70,7 +70,7 @@ impl Matcher {
                 // TODO: Handle quantifier statements
                 // NOTE: For now, we return None to indicate that no mapping can be created
                 None
-            },
+            }
             StatementNode::Relation(node) => expression.create_mapping(&node.left),
             StatementNode::Builtin(_) => Some(HashMap::new()),
         };
@@ -94,7 +94,9 @@ impl Matcher {
                 .collect::<Option<Vec<_>>>()
             {
                 let substituted = match conclusion {
-                    StatementNode::Quantifier(_) => unreachable!("Quantifier statements are not handled yet"),
+                    StatementNode::Quantifier(_) => {
+                        unreachable!("Quantifier statements are not handled yet")
+                    }
                     StatementNode::Relation(node) => node.right.apply(&mapping),
                     StatementNode::Builtin(node) => node.apply(expression),
                 };

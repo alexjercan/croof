@@ -9,7 +9,9 @@ use std::{
 
 use crate::{
     ast::{
-        BindingNode, BuiltinNode, DefineFunctionNode, DefineNode, DefineSetNode, EvaluationNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, ProgramNode, QuantifierNode, RelationNode, SetNode, StatementNode, TypeNode
+        BindingNode, BuiltinNode, DefineFunctionNode, DefineNode, DefineSetNode, EvaluationNode,
+        ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode,
+        ProgramNode, QuantifierNode, RelationNode, SetNode, StatementNode, TypeNode,
     },
     token::{Token, TokenKind, WithToken},
 };
@@ -920,7 +922,10 @@ impl Typechecker {
             errors.extend(self.check_statement(condition, &mut symbols));
         }
 
-        errors.extend(self.check_expression(&mut evaluation.expression, &symbols).1);
+        errors.extend(
+            self.check_expression(&mut evaluation.expression, &symbols)
+                .1,
+        );
 
         errors
     }

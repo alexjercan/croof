@@ -116,11 +116,7 @@ impl AstarSolver {
                 .collect();
             let implication = ImplicationNode::new(others.clone(), vec![condition.clone()]);
 
-            for (substituted, steps) in self.matcher.substitute(
-                expression,
-                &others,
-                condition,
-            ) {
+            for (substituted, steps) in self.matcher.substitute(expression, &others, condition) {
                 if let Ok(steps) = self.prove(&steps) {
                     substitutions.push((substituted, implication.clone(), steps));
                 }
@@ -129,11 +125,10 @@ impl AstarSolver {
 
         for implication in &self.implications {
             for conclusion in &implication.conclusion {
-                for (substituted, steps) in self.matcher.substitute(
-                    expression,
-                    &implication.conditions,
-                    conclusion,
-                ) {
+                for (substituted, steps) in
+                    self.matcher
+                        .substitute(expression, &implication.conditions, conclusion)
+                {
                     if let Ok(steps) = self.prove(&steps) {
                         substitutions.push((substituted, implication.clone(), steps));
                     }

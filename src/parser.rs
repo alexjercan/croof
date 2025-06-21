@@ -6,7 +6,10 @@ use std::fmt::{Debug, Display};
 
 use crate::{
     ast::{
-        BindingNode, DefineFunctionNode, DefineNode, DefineOperatorNode, DefineSetNode, EvaluationNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, ProgramNode, QuantifierKind, QuantifierNode, RelationKind, RelationNode, SetNode, StatementNode, TypeNode
+        BindingNode, DefineFunctionNode, DefineNode, DefineOperatorNode, DefineSetNode,
+        EvaluationNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode,
+        ParenNode, ProgramNode, QuantifierKind, QuantifierNode, RelationKind, RelationNode,
+        SetNode, StatementNode, TypeNode,
     },
     lexer::Lexer,
     token::{Token, TokenKind, WithToken},
@@ -75,7 +78,10 @@ impl Parser {
 
         loop {
             if self.token.kind != TokenKind::Type {
-                return Err(ParserError::Expected("type".to_string(), self.token.clone()));
+                return Err(ParserError::Expected(
+                    "type".to_string(),
+                    self.token.clone(),
+                ));
             }
             let type_node = self.token.clone();
             self.read();
@@ -218,10 +224,7 @@ impl Parser {
                 let expr = self.parse_expression()?;
 
                 if self.token.kind != TokenKind::RParen {
-                    return Err(ParserError::Expected(
-                        "')'".to_string(),
-                        self.token.clone(),
-                    ));
+                    return Err(ParserError::Expected("')'".to_string(), self.token.clone()));
                 }
                 self.read();
 
@@ -418,10 +421,13 @@ impl Parser {
                         self.read();
                     }
                     _ => {
-                        return Err(ParserError::Expected("'=>' or ','".to_string(), self.token.clone()));
+                        return Err(ParserError::Expected(
+                            "'=>' or ','".to_string(),
+                            self.token.clone(),
+                        ));
                     }
                 }
-            };
+            }
         }
 
         let conditions = statements;
