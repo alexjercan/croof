@@ -2,7 +2,7 @@ pub mod prelude {
     pub use super::{
         BindingNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode,
         ParenNode, ProgramNode, QuantifierKind, QuantifierNode, RelationKind, SetNode,
-        StatementNode, TypeNode,
+        StatementNode, TypeNode, EvaluationNode,
     };
 }
 
@@ -1151,6 +1151,39 @@ impl Display for DefineNode {
     }
 }
 
+/// The EvaluationNode represents an evaluation in the abstract syntax tree.
+///
+/// It contains a vector of `StatementNode` conditions and an `ExpressionNode` expression.
+///
+/// # Example
+/// ```croof
+/// eval f(x) = x => f(0)
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvaluationNode {
+    pub conditions: Vec<StatementNode>,
+    pub expression: ExpressionNode,
+}
+
+impl EvaluationNode {
+    /// Creates a new EvaluationNode with the given conditions and expression.
+    pub fn new(conditions: Vec<StatementNode>, expression: ExpressionNode) -> Self {
+        EvaluationNode { conditions, expression }
+    }
+}
+
+impl Display for EvaluationNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let conditions: Vec<String> = self.conditions.iter().map(|s| s.to_string()).collect();
+
+        if !conditions.is_empty() {
+            write!(f, "{} => ", conditions.join(", "))?;
+        }
+
+        write!(f, "{}", self.expression)
+    }
+}
+
 /// The ProgramNode represents the entire program in the abstract syntax tree.
 ///
 /// It contains a vector of `DefineNode` for function, operator, and set definitions,
@@ -1170,7 +1203,7 @@ impl Display for DefineNode {
 pub struct ProgramNode {
     pub defines: Vec<DefineNode>,
     pub implications: Vec<ImplicationNode>,
-    pub evaluations: Vec<ExpressionNode>,
+    pub evaluations: Vec<EvaluationNode>,
 }
 
 impl ProgramNode {
@@ -1178,7 +1211,7 @@ impl ProgramNode {
     pub fn new(
         defines: Vec<DefineNode>,
         implications: Vec<ImplicationNode>,
-        evaluations: Vec<ExpressionNode>,
+        evaluations: Vec<EvaluationNode>,
     ) -> Self {
         ProgramNode {
             defines,

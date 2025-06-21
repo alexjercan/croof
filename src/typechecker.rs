@@ -9,9 +9,7 @@ use std::{
 
 use crate::{
     ast::{
-        BindingNode, BuiltinNode, DefineFunctionNode, DefineNode, DefineSetNode, ExpressionNode,
-        ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, ProgramNode,
-        QuantifierNode, RelationNode, SetNode, StatementNode, TypeNode,
+        BindingNode, BuiltinNode, DefineFunctionNode, DefineNode, DefineSetNode, EvaluationNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, ProgramNode, QuantifierNode, RelationNode, SetNode, StatementNode, TypeNode
     },
     token::{Token, TokenKind, WithToken},
 };
@@ -914,6 +912,19 @@ impl Typechecker {
         errors
     }
 
+    fn check_evaluation(&self, evaluation: &mut EvaluationNode) -> Vec<TypecheckerError> {
+        let mut symbols: HashMap<String, TypeNode> = HashMap::new();
+        let mut errors = vec![];
+
+        for condition in &mut evaluation.conditions {
+            errors.extend(self.check_statement(condition, &mut symbols));
+        }
+
+        errors.extend(self.check_expression(&mut evaluation.expression, &symbols).1);
+
+        errors
+    }
+
     /// Checks a program node, validating all implications and statements.
     ///
     /// # Arguments
@@ -935,8 +946,7 @@ impl Typechecker {
         program.implications.extend(builtin_implications());
 
         for eval in &mut program.evaluations {
-            let (_, eval_errors) = self.check_expression(eval, &HashMap::default());
-            errors.extend(eval_errors);
+            errors.extend(self.check_evaluation(eval));
         }
 
         errors

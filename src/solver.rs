@@ -5,7 +5,7 @@ pub mod prelude {
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use crate::{
-    ast::{ExpressionNode, ImplicationNode, RelationKind, StatementNode},
+    ast::{EvaluationNode, ExpressionNode, ImplicationNode, RelationKind, StatementNode},
     matcher::Matcher,
 };
 
@@ -32,7 +32,7 @@ pub trait Solver {
     /// the solving process fails.
     fn solve(
         &self,
-        expression: &ExpressionNode,
+        evaluation: &EvaluationNode,
     ) -> Result<(Vec<ProofStep>, ExpressionNode), SolverError>;
 
     /// prove attempts to prove a set of statements and returns a vector of proof steps.
@@ -104,13 +104,39 @@ impl AstarSolver {
     fn substitutions(
         &self,
         expression: &ExpressionNode,
+        conditions: &Vec<StatementNode>,
     ) -> Vec<(ExpressionNode, ImplicationNode, Vec<ProofStep>)> {
         let mut substitutions = Vec::new();
 
-        for implication in &self.implications {
-            for (substituted, steps) in self.matcher.substitute(expression, implication) {
+        for condition in conditions {
+            let others: Vec<_> = conditions
+                .iter()
+                .filter(|&c| c != condition)
+                .cloned()
+                .collect();
+            let implication = ImplicationNode::new(others.clone(), vec![condition.clone()]);
+
+            for (substituted, steps) in self.matcher.substitute(
+                expression,
+                &others,
+                condition,
+            ) {
                 if let Ok(steps) = self.prove(&steps) {
                     substitutions.push((substituted, implication.clone(), steps));
+                }
+            }
+        }
+
+        for implication in &self.implications {
+            for conclusion in &implication.conclusion {
+                for (substituted, steps) in self.matcher.substitute(
+                    expression,
+                    &implication.conditions,
+                    conclusion,
+                ) {
+                    if let Ok(steps) = self.prove(&steps) {
+                        substitutions.push((substituted, implication.clone(), steps));
+                    }
                 }
             }
         }
@@ -120,6 +146,7 @@ impl AstarSolver {
 
     fn solve_astar(
         &self,
+        conditions: &Vec<StatementNode>,
         expression: &ExpressionNode,
         is_target: impl Fn(&ExpressionNode) -> bool,
         heuristic: impl Fn(&ExpressionNode) -> i32,
@@ -148,7 +175,7 @@ impl AstarSolver {
                 return Ok((steps, expression.clone()));
             }
 
-            for (substitution, implication, steps) in self.substitutions(&expression) {
+            for (substitution, implication, steps) in self.substitutions(&expression, conditions) {
                 let d = expression.distance(&substitution);
                 let tentative_g_score: i32 = g_score.get(&expression).unwrap_or(&i32::MAX) + d;
                 if &tentative_g_score < g_score.get(&substitution).unwrap_or(&i32::MAX) {
@@ -177,6 +204,7 @@ impl AstarSolver {
         match statement {
             StatementNode::Relation(node) => {
                 let (mut right_steps, right_expr) = self.solve_astar(
+                    &vec![],
                     &node.right,
                     |expr| expr.degree() == 0,
                     |expr| expr.degree() as i32,
@@ -184,11 +212,13 @@ impl AstarSolver {
 
                 match &node.kind {
                     RelationKind::Equality => self.solve_astar(
+                        &vec![],
                         &node.left,
                         |expr| expr == &right_expr,
                         |expr| expr.degree() as i32,
                     ),
                     RelationKind::GreaterThan => self.solve_astar(
+                        &vec![],
                         &node.left,
                         |expr| expr > &right_expr,
                         |expr| expr.degree() as i32,
@@ -208,10 +238,11 @@ impl AstarSolver {
 impl Solver for AstarSolver {
     fn solve(
         &self,
-        expression: &ExpressionNode,
+        evaluation: &EvaluationNode,
     ) -> Result<(Vec<ProofStep>, ExpressionNode), SolverError> {
         self.solve_astar(
-            expression,
+            &evaluation.conditions,
+            &evaluation.expression,
             |expr| expr.degree() == 0,
             |expr| expr.degree() as i32,
         )

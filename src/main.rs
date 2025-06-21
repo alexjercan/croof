@@ -35,8 +35,8 @@ fn display_tokens(files: Vec<String>) {
     }
 }
 
-pub fn display_solution(expression: &ExpressionNode, steps: &[ProofStep], result: &ExpressionNode) {
-    println!("Expression: {}", expression);
+pub fn display_solution(evaluation: &EvaluationNode, steps: &[ProofStep], result: &ExpressionNode) {
+    println!("Expression: {}", evaluation);
     for (parent, target, implication) in steps {
         println!("  - {} => {} (apply {})", parent, target, implication);
     }
@@ -91,10 +91,10 @@ fn main() -> ExitCode {
     }
 
     let solver = AstarSolver::new(Matcher::new(), ast.implications.clone());
-    for expression in &ast.evaluations {
-        match solver.solve(expression) {
+    for evaluation in &ast.evaluations {
+        match solver.solve(evaluation) {
             Ok((steps, result)) => {
-                display_solution(expression, &steps, &result);
+                display_solution(evaluation, &steps, &result);
             }
             Err(e) => eprintln!("Error solving expression: {:?}", e),
         }

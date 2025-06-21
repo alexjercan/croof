@@ -6,10 +6,7 @@ use std::fmt::{Debug, Display};
 
 use crate::{
     ast::{
-        BindingNode, DefineFunctionNode, DefineNode, DefineOperatorNode, DefineSetNode,
-        ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode,
-        ProgramNode, QuantifierKind, QuantifierNode, RelationKind, RelationNode, SetNode,
-        StatementNode, TypeNode,
+        BindingNode, DefineFunctionNode, DefineNode, DefineOperatorNode, DefineSetNode, EvaluationNode, ExpressionNode, ImplicationNode, LiteralNode, NumberNode, OperatorNode, ParenNode, ProgramNode, QuantifierKind, QuantifierNode, RelationKind, RelationNode, SetNode, StatementNode, TypeNode
     },
     lexer::Lexer,
     token::{Token, TokenKind, WithToken},
@@ -43,6 +40,7 @@ impl Display for ParserError {
 /// The parser uses a lexer to tokenize the input and a source map to keep track of the
 /// source locations of tokens. It maintains the current token and the next token to facilitate
 /// parsing operations.
+#[derive(Clone)]
 pub struct Parser {
     lexer: Lexer,
     token: Token,
@@ -395,6 +393,43 @@ impl Parser {
         }
     }
 
+    fn parse_evaluation(&mut self) -> Result<EvaluationNode, ParserError> {
+        // evaluation ::= [[statment]+ =>]? expression
+
+        // TODO: maybe I want to do it without `=>` and just use `,` to separate conditions and
+        // expression (I like that more, but it might be harder to parse)
+
+        let mut statements = Vec::new();
+
+        let mut clone = self.clone();
+        let is_conditions = clone.parse_statement().is_ok();
+
+        if is_conditions {
+            loop {
+                let statement = self.parse_statement()?;
+                statements.push(statement);
+
+                match self.token.kind {
+                    TokenKind::Then => {
+                        self.read();
+                        break;
+                    }
+                    TokenKind::Comma => {
+                        self.read();
+                    }
+                    _ => {
+                        return Err(ParserError::Expected("'=>' or ','".to_string(), self.token.clone()));
+                    }
+                }
+            };
+        }
+
+        let conditions = statements;
+        let expression = self.parse_expression()?;
+
+        Ok(EvaluationNode::new(conditions, expression))
+    }
+
     /// Parses the entire program and returns a `ProgramNode`.
     ///
     /// # Returns
@@ -415,9 +450,9 @@ impl Parser {
                 TokenKind::Eof => break,
                 TokenKind::Eval => {
                     self.read();
-                    let expr = self.parse_expression()?;
+                    let eval = self.parse_evaluation()?;
 
-                    evaluations.push(expr);
+                    evaluations.push(eval);
                 }
                 TokenKind::Def => {
                     self.read();

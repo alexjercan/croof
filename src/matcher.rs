@@ -4,7 +4,7 @@ pub mod prelude {
 
 use std::collections::HashMap;
 
-use crate::ast::{ExpressionNode, ImplicationNode, StatementNode};
+use crate::ast::{ExpressionNode, StatementNode};
 
 /// Matcher is a utility for matching expressions against implications
 /// and performing substitutions based on those implications.
@@ -20,13 +20,10 @@ impl Matcher {
     fn substitute_helper(
         &self,
         expression: &ExpressionNode,
-        implication: &ImplicationNode,
+        conditions: &Vec<StatementNode>,
+        conclusion: &StatementNode,
         substitutions: &mut Vec<(ExpressionNode, Vec<StatementNode>)>,
     ) {
-        // NOTE: We assume that the conclusion of the implication is a single statement.
-        // TODO: Handle multiple statements in the conclusion.
-        let statement = &implication.conclusion[0];
-
         match expression {
             ExpressionNode::Set(_) => todo!("Handle set expressions"),
             ExpressionNode::Type(_) => todo!("Handle type expressions"),
@@ -34,7 +31,7 @@ impl Matcher {
             ExpressionNode::Literal(_) => {}
             ExpressionNode::Binding(node) => {
                 for (i, arg) in node.arguments.iter().enumerate() {
-                    let arg_substitutions = self.substitute(arg, implication);
+                    let arg_substitutions = self.substitute(arg, conditions, conclusion);
 
                     for (substituted, steps) in arg_substitutions {
                         let mut new_expr = node.clone();
@@ -44,14 +41,14 @@ impl Matcher {
                 }
             }
             ExpressionNode::Operator(node) => {
-                let left_substitutions = self.substitute(&node.left, implication);
+                let left_substitutions = self.substitute(&node.left, conditions, conclusion);
                 for (left_substituted, left_steps) in left_substitutions {
                     let mut new_expr = node.clone();
                     *new_expr.left = left_substituted;
                     substitutions.push((ExpressionNode::Operator(new_expr.clone()), left_steps));
                 }
 
-                let right_substitutions = self.substitute(&node.right, implication);
+                let right_substitutions = self.substitute(&node.right, conditions, conclusion);
                 for (right_substituted, right_steps) in right_substitutions {
                     let mut new_expr = node.clone();
                     *new_expr.right = right_substituted;
@@ -59,7 +56,7 @@ impl Matcher {
                 }
             }
             ExpressionNode::Paren(node) => {
-                let expr_substitutions = self.substitute(&node.expression, implication);
+                let expr_substitutions = self.substitute(&node.expression, conditions, conclusion);
                 for (substituted, steps) in expr_substitutions {
                     let mut new_expr = node.clone();
                     new_expr.expression = Box::new(substituted);
@@ -68,15 +65,18 @@ impl Matcher {
             }
         }
 
-        let mapping = match statement {
-            StatementNode::Quantifier(_) => todo!("Implement mapping for QuantifierNode"),
+        let mapping = match conclusion {
+            StatementNode::Quantifier(_) => {
+                // TODO: Handle quantifier statements
+                // NOTE: For now, we return None to indicate that no mapping can be created
+                None
+            },
             StatementNode::Relation(node) => expression.create_mapping(&node.left),
             StatementNode::Builtin(_) => Some(HashMap::new()),
         };
 
         if let Some(mapping) = mapping {
-            if let Some(conditions) = implication
-                .conditions
+            if let Some(conditions) = conditions
                 .iter()
                 .map(|condition| match condition {
                     StatementNode::Quantifier(node) => {
@@ -89,12 +89,12 @@ impl Matcher {
 
                         Some(StatementNode::Relation(relation))
                     }
-                    StatementNode::Builtin(_) => todo!("Handle builtin statements"),
+                    StatementNode::Builtin(_) => unreachable!(),
                 })
                 .collect::<Option<Vec<_>>>()
             {
-                let substituted = match statement {
-                    StatementNode::Quantifier(_) => todo!("Implement apply for QuantifierNode"),
+                let substituted = match conclusion {
+                    StatementNode::Quantifier(_) => unreachable!("Quantifier statements are not handled yet"),
                     StatementNode::Relation(node) => node.right.apply(&mapping),
                     StatementNode::Builtin(node) => node.apply(expression),
                 };
@@ -123,10 +123,11 @@ impl Matcher {
     pub fn substitute(
         &self,
         expression: &ExpressionNode,
-        implication: &ImplicationNode,
+        conditions: &Vec<StatementNode>,
+        conclusion: &StatementNode,
     ) -> Vec<(ExpressionNode, Vec<StatementNode>)> {
         let mut substitutions = Vec::new();
-        self.substitute_helper(expression, implication, &mut substitutions);
+        self.substitute_helper(expression, conditions, conclusion, &mut substitutions);
 
         substitutions
     }
