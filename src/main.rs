@@ -1,4 +1,6 @@
 use clap::Parser as ArgParser;
+use std::collections::{hash_map, HashMap};
+use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 
 use croof::prelude::*;
@@ -19,6 +21,9 @@ struct Args {
     /// Stop at the typechecker stage
     #[arg(long, short = 't')]
     typecheck: bool,
+    /// Run in interactive mode
+    #[arg(long, short = 'i')]
+    interactive: bool,
 }
 
 fn display_tokens(files: Vec<String>) {
@@ -73,6 +78,8 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
+    ast.implications.extend(builtin_implications());
+
     let mut typechecker = Typechecker::new();
     let errors = typechecker.check_program(&mut ast);
     if !errors.is_empty() {
@@ -100,11 +107,104 @@ fn main() -> ExitCode {
         }
     }
 
+    if args.interactive {
+        let stdin = io::stdin();
+
+        loop {
+            let mut buffer = String::new();
+
+            for line in stdin.lock().lines() {
+                let Ok(line) = line else { break };
+
+                if line == "." {
+                    break;
+                }
+
+                buffer.push_str(&line);
+            }
+
+            let lexer = sourcemap.add_content(&buffer);
+
+            let mut program = match Parser::new(lexer).parse() {
+                Ok(program) => program,
+                Err(error) => {
+                    sourcemap.display_error(&error);
+                    eprintln!("Failed to parse content");
+                    continue;
+                }
+            };
+
+            let errors = typechecker.check_program(&mut program);
+            if !errors.is_empty() {
+                sourcemap.display_errors(&errors);
+                eprintln!(
+                    "Typechecking failed with {} {}",
+                    errors.len(),
+                    if errors.len() == 1 { "error" } else { "errors" }
+                );
+                continue;
+            }
+
+            ast.merge(program.clone());
+
+            let matcher = Matcher::new();
+            for evaluation in &program.evaluations {
+                let mut expression = evaluation.expression.clone();
+
+                loop {
+                    println!("eval {}", expression);
+
+                    let mut substitutions = HashMap::<ImplicationNode, Vec<ExpressionNode>>::new();
+                    for implication in &ast.implications {
+                        for conclusion in &implication.conclusion {
+                            for (substituted, _) in matcher.substitute(&expression, &implication.conditions, conclusion) {
+
+                                match substitutions.entry(implication.clone()) {
+                                    hash_map::Entry::Occupied(mut e) => {
+                                        e.get_mut().push(substituted);
+                                    },
+                                    hash_map::Entry::Vacant(e) => {
+                                        e.insert(vec![substituted]);
+                                    },
+                                };
+                            }
+                        }
+                    }
+
+                    let substitutions = substitutions.iter().collect::<Vec<_>>();
+
+                    println!("Available implications: ");
+                    for (i, (implication, _)) in substitutions.iter().enumerate() {
+                        println!("{}: {}", i, implication);
+                    }
+                    print!("Which implication do you want to choose? ");
+                    let _ = io::stdout().flush();
+
+                    let Some(Ok(choice)) = stdin.lock().lines().next() else { break };
+                    if choice == "." {
+                        println!("DONE: {}", expression);
+                        break;
+                    }
+
+                    let Ok(choice) = choice.parse::<usize>() else { break };
+
+                    let (_, substitutions) = substitutions[choice];
+                    println!("Available substitutions: ");
+                    for (i, substitution) in substitutions.iter().enumerate() {
+                        println!("{}: {}", i, substitution);
+                    }
+                    print!("Which substitution do you want to choose? ");
+                    let _ = io::stdout().flush();
+
+                    let Some(Ok(choice)) = stdin.lock().lines().next() else { break };
+                    let Ok(choice) = choice.parse::<usize>() else { break };
+
+                    expression = substitutions[choice].clone();
+                }
+            }
+        }
+    }
+
     ExitCode::SUCCESS
 }
 
-// TODO: Allow eval expression to contain statements (quantifiers, relations, etc.) and then have
-// the expression to be solved
-// Example: `eval forall a : N, a + a`
-// Then we have some steps.... and then
-// Result: 2 * a

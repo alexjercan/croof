@@ -871,7 +871,7 @@ impl Display for ExpressionNode {
 }
 
 /// The RelationKind enum represents the kind of relation used in the abstract syntax tree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RelationKind {
     Equality,
     GreaterThan,
@@ -896,7 +896,7 @@ impl Display for RelationKind {
 /// f(x, y) = g(z)
 /// f(x, y) > 42
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RelationNode {
     pub kind: RelationKind,
     pub token: Token,
@@ -944,6 +944,12 @@ pub struct BuiltinNode {
     pub substitute_fn: SubstituteFn,
 }
 
+impl Hash for BuiltinNode {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.display.hash(state);
+    }
+}
+
 impl Debug for BuiltinNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "BuiltinNode({})", self.display)
@@ -984,7 +990,7 @@ impl Display for BuiltinNode {
 }
 
 /// The StatementNode enum represents different types of statements in the abstract syntax tree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StatementNode {
     Quantifier(QuantifierNode),
     Relation(RelationNode),
@@ -1002,7 +1008,7 @@ impl Display for StatementNode {
 }
 
 /// The ImplicationNode represents an implication in the abstract syntax tree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ImplicationNode {
     pub conditions: Vec<StatementNode>,
     pub conclusion: Vec<StatementNode>,

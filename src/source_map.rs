@@ -58,6 +58,18 @@ impl SourceMap {
         Ok(Lexer::new(self.files[id].clone()))
     }
 
+    pub fn add_content<S>(&mut self, content: S) -> Lexer
+    where
+        S: Into<String>,
+    {
+        let id = self.files.len();
+
+        let file = SourceFile::new(id, "<stdin>".to_string(), content.into());
+        self.files.push(file);
+
+        Lexer::new(self.files[id].clone())
+    }
+
     /// Formats the position of a token in the source file as a string.
     ///
     /// This method takes a `Token` and retrieves the corresponding source file from the source

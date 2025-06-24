@@ -1,5 +1,5 @@
 pub mod prelude {
-    pub use super::{Typechecker, TypecheckerError, FUNCTION_NEG, FUNCTION_SUCC, TYPE_N, TYPE_Z};
+    pub use super::{Typechecker, TypecheckerError, FUNCTION_NEG, FUNCTION_SUCC, TYPE_N, TYPE_Z, builtin_implications};
 }
 
 use std::{
@@ -127,7 +127,7 @@ impl Display for TypecheckerError {
     }
 }
 
-fn builtin_implications() -> Vec<ImplicationNode> {
+pub fn builtin_implications() -> Vec<ImplicationNode> {
     vec![
         // forall a : N => a = succ(a - 1)
         ImplicationNode::new(
@@ -751,6 +751,10 @@ impl Typechecker {
         expression: &mut ExpressionNode,
         symbols: &HashMap<String, TypeNode>,
     ) -> (Option<Vec<String>>, Vec<TypecheckerError>) {
+        if let Some(node_type) = expression.node_type() {
+            return (Some(node_type), vec![]);
+        }
+
         match expression {
             ExpressionNode::Set(_) => todo!(),
             ExpressionNode::Type(_) => todo!(),
@@ -914,7 +918,7 @@ impl Typechecker {
         errors
     }
 
-    fn check_evaluation(&self, evaluation: &mut EvaluationNode) -> Vec<TypecheckerError> {
+    pub fn check_evaluation(&self, evaluation: &mut EvaluationNode) -> Vec<TypecheckerError> {
         let mut symbols: HashMap<String, TypeNode> = HashMap::new();
         let mut errors = vec![];
 
@@ -948,7 +952,6 @@ impl Typechecker {
         for implication in &mut program.implications {
             errors.extend(self.check_implication(implication));
         }
-        program.implications.extend(builtin_implications());
 
         for eval in &mut program.evaluations {
             errors.extend(self.check_evaluation(eval));

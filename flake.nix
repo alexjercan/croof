@@ -191,6 +191,7 @@
           rustc
           rustfmt
           clippy
+          rlwrap
         ];
 
         buildInputs = with pkgs; [];
