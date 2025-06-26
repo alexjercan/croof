@@ -1207,6 +1207,8 @@ impl Display for EvaluationNode {
 /// f(x, y) => g(x) + g(y)
 ///
 /// eval f(1, 2)
+///
+/// proof forall a : N => 0 < a + 1
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ProgramNode {

@@ -76,12 +76,10 @@ impl Matcher {
         };
 
         if let Some(mapping) = mapping {
-            if let Some(conditions) = conditions
+            let conditions = conditions
                 .iter()
-                .map(|condition| match condition {
-                    StatementNode::Quantifier(node) => {
-                        Some(StatementNode::Quantifier(node.clone()))
-                    }
+                .filter_map(|condition| match condition {
+                    StatementNode::Quantifier(_) => None,
                     StatementNode::Relation(node) => {
                         let mut relation = node.clone();
                         relation.left = node.left.apply(&mapping)?;
@@ -91,19 +89,18 @@ impl Matcher {
                     }
                     StatementNode::Builtin(_) => unreachable!(),
                 })
-                .collect::<Option<Vec<_>>>()
-            {
-                let substituted = match conclusion {
-                    StatementNode::Quantifier(_) => {
-                        unreachable!("Quantifier statements are not handled yet")
-                    }
-                    StatementNode::Relation(node) => node.right.apply(&mapping),
-                    StatementNode::Builtin(node) => node.apply(expression),
-                };
+                .collect::<Vec<_>>();
 
-                if let Some(substituted) = substituted {
-                    substitutions.push((substituted, conditions));
+            let substituted = match conclusion {
+                StatementNode::Quantifier(_) => {
+                    unreachable!("Quantifier statements are not handled yet")
                 }
+                StatementNode::Relation(node) => node.right.apply(&mapping),
+                StatementNode::Builtin(node) => node.apply(expression),
+            };
+
+            if let Some(substituted) = substituted {
+                substitutions.push((substituted, conditions));
             }
         }
     }

@@ -40,7 +40,7 @@ fn display_tokens(files: Vec<String>) {
     }
 }
 
-pub fn display_solution(evaluation: &EvaluationNode, steps: &[ProofStep], result: &ExpressionNode) {
+pub fn display_solution(evaluation: &EvaluationNode, steps: &[EvalStep], result: &ExpressionNode) {
     println!("Expression: {}", evaluation);
     for (parent, target, implication) in steps {
         println!("  - {} => {} (apply {})", parent, target, implication);
@@ -97,114 +97,33 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let solver = AstarSolver::new(Matcher::new(), ast.implications.clone());
-    for evaluation in &ast.evaluations {
-        match solver.solve(evaluation) {
-            Ok((steps, result)) => {
-                display_solution(evaluation, &steps, &result);
-            }
-            Err(e) => eprintln!("Error solving expression: {:?}", e),
-        }
-    }
-
     if args.interactive {
-        let stdin = io::stdin();
+        let mut solver = InteractiveSolver::new(
+            sourcemap,
+            typechecker,
+            Matcher::new(),
+            ast.implications.clone(),
+        );
 
-        loop {
-            let mut buffer = String::new();
-
-            for line in stdin.lock().lines() {
-                let Ok(line) = line else { break };
-
-                if line == "." {
-                    break;
-                }
-
-                buffer.push_str(&line);
-            }
-
-            let lexer = sourcemap.add_content(&buffer);
-
-            let mut program = match Parser::new(lexer).parse() {
-                Ok(program) => program,
-                Err(error) => {
-                    sourcemap.display_error(&error);
-                    eprintln!("Failed to parse content");
-                    continue;
-                }
-            };
-
-            let errors = typechecker.check_program(&mut program);
-            if !errors.is_empty() {
-                sourcemap.display_errors(&errors);
-                eprintln!(
-                    "Typechecking failed with {} {}",
-                    errors.len(),
-                    if errors.len() == 1 { "error" } else { "errors" }
-                );
-                continue;
-            }
-
-            ast.merge(program.clone());
-
-            let matcher = Matcher::new();
-            for evaluation in &program.evaluations {
-                let mut expression = evaluation.expression.clone();
-
-                loop {
-                    println!("eval {}", expression);
-
-                    let mut substitutions = HashMap::<ImplicationNode, Vec<ExpressionNode>>::new();
-                    for implication in &ast.implications {
-                        for conclusion in &implication.conclusion {
-                            for (substituted, _) in matcher.substitute(&expression, &implication.conditions, conclusion) {
-
-                                match substitutions.entry(implication.clone()) {
-                                    hash_map::Entry::Occupied(mut e) => {
-                                        e.get_mut().push(substituted);
-                                    },
-                                    hash_map::Entry::Vacant(e) => {
-                                        e.insert(vec![substituted]);
-                                    },
-                                };
-                            }
-                        }
-                    }
-
-                    let substitutions = substitutions.iter().collect::<Vec<_>>();
-
-                    println!("Available implications: ");
-                    for (i, (implication, _)) in substitutions.iter().enumerate() {
-                        println!("{}: {}", i, implication);
-                    }
-                    print!("Which implication do you want to choose? ");
-                    let _ = io::stdout().flush();
-
-                    let Some(Ok(choice)) = stdin.lock().lines().next() else { break };
-                    if choice == "." {
-                        println!("DONE: {}", expression);
-                        break;
-                    }
-
-                    let Ok(choice) = choice.parse::<usize>() else { break };
-
-                    let (_, substitutions) = substitutions[choice];
-                    println!("Available substitutions: ");
-                    for (i, substitution) in substitutions.iter().enumerate() {
-                        println!("{}: {}", i, substitution);
-                    }
-                    print!("Which substitution do you want to choose? ");
-                    let _ = io::stdout().flush();
-
-                    let Some(Ok(choice)) = stdin.lock().lines().next() else { break };
-                    let Ok(choice) = choice.parse::<usize>() else { break };
-
-                    expression = substitutions[choice].clone();
-                }
+        match solver.interact() {
+            Ok(_) => return ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("Error during interactive session: {:?}", e);
+                return ExitCode::FAILURE;
             }
         }
-    }
+    } else {
+        let solver = AstarSolver::new(Matcher::new(), ast.implications.clone());
+        for evaluation in &ast.evaluations {
+            match solver.solve(evaluation) {
+                Ok((steps, result)) => {
+                    display_solution(evaluation, &steps, &result);
+                }
+                Err(e) => eprintln!("Error solving expression: {:?}", e),
+            }
+        }
 
-    ExitCode::SUCCESS
+        ExitCode::SUCCESS
+    }
 }
 
