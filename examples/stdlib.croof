@@ -4,29 +4,41 @@ forall a : N => (a) = a # Identity
 
 def + : N -> N -> N # Addition on Natural Numbers
 
-forall a : N               => 0 + a = a # Identity for Addition
+forall a : N => 0 + a = a # Identity for Addition
+forall a : N => a = a + 0 # Identity for Addition (alternative form)
+
 forall a : N, forall b : N => succ(a) + b = a + succ(b) # Successor Property for Addition
 
 forall a : N, forall b : N => a + b = b + a # Commutativity of Addition
-forall a : N, forall b : N, forall c : N => (a + b) + c = a + (b + c) # Associativity of Addition
 
-forall a : N, forall b : N, a = b => succ(a) = succ(b)
+forall a : N, forall b : N, forall c : N => (a + b) + c = a + (b + c) # Associativity of Addition
+forall a : N, forall b : N, forall c : N => a + (b + c) = (a + b) + c # Associativity of Addition (alternative form)
 
 def * : N -> N -> N # Multiplication on Natural Numbers
 
-forall a : N               => 0 * a = 0 # Absolute Zero for Multiplication
-forall a : N               => 1 * a = a # Identity for Multiplication with 1
+forall a : N => 0 * a = 0 # Absolute Zero for Multiplication
+forall a : N => 1 * a = a # Identity for Multiplication with 1
+forall a : N => a = a * 1 # Identity for Multiplication with 1 (alternative form)
+
 forall a : N, forall b : N => succ(a) * b = (a * b) + b # Successor Property for Multiplication
 
 forall a : N, forall b : N => a * b = b * a # Commutativity of Multiplication
+
 forall a : N, forall b : N, forall c : N => (a * b) * c = a * (b * c) # Associativity of Multiplication
+forall a : N, forall b : N, forall c : N => a * (b * c) = (a * b) * c # Associativity of Multiplication (alternative form)
+
 forall a : N, forall b : N, forall c : N => a * (b + c) = (a * b) + (a * c) # Distributivity of Multiplication over Addition
+forall a : N, forall b : N, forall c : N => (a * b) + (a * c) = a * (b + c) # Distributivity of Multiplication over Addition (alternative form)
 
 def ^ : N -> N -> N # Exponentiation on Natural Numbers
 
 forall a : N => a ^ 0 = 1 # Identity for Exponentiation
 forall a : N => a ^ 1 = a # Identity for Exponentiation with 1
+forall a : N => a = a ^ 1 # Identity for Exponentiation with 1 (alternative form)
+
 forall a : N, forall b : N => a ^ succ(b) = (a ^ b) * a # Successor Property for Exponentiation
+
+forall a : N, forall b : N => (a ^ b) * (a ^ c) = a ^ (b + c) # Exponentiation and Multiplication
 
 # Integer Definitions
 

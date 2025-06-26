@@ -1,6 +1,4 @@
 use clap::Parser as ArgParser;
-use std::collections::{hash_map, HashMap};
-use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 
 use croof::prelude::*;

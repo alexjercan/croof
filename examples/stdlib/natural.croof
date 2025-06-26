@@ -1,0 +1,67 @@
+# Natural Numbers in Croof
+
+## 1. Identity
+forall a : N => (a) = a
+forall a : N => a = (a)
+
+## 2. Addition on Natural Numbers
+def + : N -> N -> N
+
+### 2.1. Identity for Addition (adding 0 to a number does not change it)
+forall a : N => 0 + a = a
+forall a : N => a = a + 0
+
+### 2.2. Successor Property for Addition
+forall a : N, forall b : N => succ(a) + b = a + succ(b)
+
+### 2.3. Commutativity of Addition
+forall a : N, forall b : N => a + b = b + a
+
+### 2.4. Associativity of Addition
+forall a : N, forall b : N, forall c : N => (a + b) + c = a + (b + c)
+forall a : N, forall b : N, forall c : N => a + (b + c) = (a + b) + c
+
+## 3. Multiplication on Natural Numbers
+def * : N -> N -> N
+
+### 3.1. Absolute Zero for Multiplication
+forall a : N => 0 * a = 0
+
+### 3.2. Identity for Multiplication with 1
+forall a : N => 1 * a = a
+forall a : N => a = a * 1
+
+### 3.3. Successor Property for Multiplication
+forall a : N, forall b : N => succ(a) * b = (a * b) + b
+
+### 3.4. Commutativity of Multiplication
+forall a : N, forall b : N => a * b = b * a
+
+### 3.5. Associativity of Multiplication
+forall a : N, forall b : N, forall c : N => (a * b) * c = a * (b * c)
+forall a : N, forall b : N, forall c : N => a * (b * c) = (a * b) * c
+
+### 3.6. Distributivity of Multiplication over Addition
+forall a : N, forall b : N, forall c : N => a * (b + c) = (a * b) + (a * c)
+forall a : N, forall b : N, forall c : N => (a * b) + (a * c) = a * (b + c)
+
+## 4. Exponentiation on Natural Numbers
+def ^ : N -> N -> N
+
+### 4.1. Identity for Exponentiation with 0
+forall a : N => a ^ 0 = 1
+
+### 4.2. Identity for Exponentiation with 1
+forall a : N => a ^ 1 = a
+forall a : N => a = a ^ 1
+
+### 4.3. Successor Property for Exponentiation
+forall a : N, forall b : N => a ^ succ(b) = (a ^ b) * a
+
+### 4.4. Exponentiation Multiplication with same base
+forall a : N, forall b : N, forall c : N => (a ^ b) * (a ^ c) = a ^ (b + c)
+forall a : N, forall b : N, forall c : N => a ^ (b + c) = (a ^ b) * (a ^ c)
+
+### 4.5. Exponentiation Multiplication with same exponent
+forall a : N, forall b : N, forall c : N => (a ^ c) * (b ^ c) = (a * b) ^ c
+forall a : N, forall b : N, forall c : N => (a ^ c) + (b ^ c) = (a + b) ^ c
