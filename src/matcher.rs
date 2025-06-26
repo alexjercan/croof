@@ -96,7 +96,9 @@ impl Matcher {
                     unreachable!("Quantifier statements are not handled yet")
                 }
                 StatementNode::Relation(node) => node.right.apply(&mapping),
-                StatementNode::Builtin(node) => node.apply(expression),
+                StatementNode::Builtin(node) => {
+                    node.apply(expression)
+                }
             };
 
             if let Some(substituted) = substituted {
@@ -127,6 +129,78 @@ impl Matcher {
     ) -> Vec<(ExpressionNode, Vec<StatementNode>)> {
         let mut substitutions = Vec::new();
         self.substitute_helper(expression, conditions, conclusion, &mut substitutions);
+
+        substitutions
+    }
+
+    pub fn substitute_statement(
+        &self,
+        statement: &StatementNode,
+        conditions: &Vec<StatementNode>,
+        conclusion: &StatementNode,
+    ) -> Vec<(StatementNode, Vec<StatementNode>)> {
+        let mut substitutions = Vec::new();
+
+        match statement {
+            StatementNode::Quantifier(_) => {},
+            StatementNode::Relation(node) => {
+                for (substituted, steps) in
+                    self.substitute(&node.left, conditions, conclusion)
+                {
+                    let mut node = node.clone();
+                    node.left = substituted;
+                    substitutions.push((StatementNode::Relation(node.clone()), steps));
+                }
+
+                for (substituted, steps) in
+                    self.substitute(&node.right, conditions, conclusion)
+                {
+                    let mut node = node.clone();
+                    node.right = substituted;
+                    substitutions.push((StatementNode::Relation(node.clone()), steps));
+                }
+
+                if let Some(mapping) = statement.create_mapping(conclusion) {
+                    let conditions = conditions
+                        .iter()
+                        .filter_map(|condition| match condition {
+                            StatementNode::Quantifier(_) => None,
+                            StatementNode::Relation(node) => {
+                                let mut relation = node.clone();
+                                relation.left = node.left.apply(&mapping)?;
+                                relation.right = node.right.apply(&mapping)?;
+
+                                Some(StatementNode::Relation(relation))
+                            }
+                            StatementNode::Builtin(_) => unreachable!(),
+                        })
+                        .collect::<Vec<_>>();
+
+                    let substituted = match conclusion {
+                        StatementNode::Quantifier(_) => {
+                            unreachable!("Quantifier statements are not handled yet")
+                        }
+                        StatementNode::Relation(node) => {
+                            match (node.left.apply(&mapping), node.right.apply(&mapping)) {
+                                (Some(left), Some(right)) => {
+                                    let mut relation = node.clone();
+                                    relation.left = left;
+                                    relation.right = right;
+                                    Some(StatementNode::Relation(relation))
+                                }
+                                _ => None,
+                            }
+                        },
+                        StatementNode::Builtin(_) => todo!("Handle built-in statements"),
+                    };
+
+                    if let Some(substituted) = substituted {
+                        substitutions.push((substituted, conditions));
+                    }
+                }
+            }
+            StatementNode::Builtin(_) => todo!("Handle built-in statements"),
+        }
 
         substitutions
     }

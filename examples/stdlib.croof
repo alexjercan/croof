@@ -10,6 +10,8 @@ forall a : N, forall b : N => succ(a) + b = a + succ(b) # Successor Property for
 forall a : N, forall b : N => a + b = b + a # Commutativity of Addition
 forall a : N, forall b : N, forall c : N => (a + b) + c = a + (b + c) # Associativity of Addition
 
+forall a : N, forall b : N, a = b => succ(a) = succ(b)
+
 def * : N -> N -> N # Multiplication on Natural Numbers
 
 forall a : N               => 0 * a = 0 # Absolute Zero for Multiplication

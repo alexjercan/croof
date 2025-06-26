@@ -117,6 +117,8 @@ impl Lexer {
             Token::new(TokenKind::Exists)
         } else if value == "eval" {
             Token::new(TokenKind::Eval)
+        } else if value == "proof" {
+            Token::new(TokenKind::Proof)
         } else if value == "def" {
             Token::new(TokenKind::Def)
         } else {

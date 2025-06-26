@@ -40,23 +40,24 @@
 //! input.
 
 use console::Term;
-use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
-use std::{collections::HashMap, fmt::Display, io};
+use dialoguer::{theme::ColorfulTheme, Select};
+use std::{collections::HashSet, fmt::Display, io};
 
 use crate::{
-    ast::{EvaluationNode, ExpressionNode, ImplicationNode, ProgramNode, StatementNode},
+    ast::{EvaluationNode, ImplicationNode},
     matcher::Matcher,
     parser::{Parser, ParserError},
     prelude::{SourceMap, Typechecker, TypecheckerError},
 };
 
-use super::{EvalStep, ProofStep, Solver, SolverError};
+use super::{EvalStep, ProofStep};
 
 const HELP: &str = "help";
 const BEGIN: &str = "begin";
 const END: &str = "end";
 const NEXT: &str = "next";
 const BACK: &str = "back";
+const SHOW: &str = "show";
 
 #[derive(Debug)]
 pub enum CroofShellError {
@@ -87,6 +88,12 @@ impl Display for CroofShellError {
     }
 }
 
+#[derive(Debug, Clone)]
+enum InteractiveItem {
+    Evaluation((EvaluationNode, Vec<EvalStep>, Vec<usize>)),
+    Theorem((ImplicationNode, Vec<ProofStep>, Vec<usize>)),
+}
+
 /// InteractiveSolver implements an interactive solver for expressions and statements.
 pub struct InteractiveSolver {
     sourcemap: SourceMap,
@@ -98,10 +105,10 @@ pub struct InteractiveSolver {
     term: Term,
     theme: ColorfulTheme,
 
-    evaluation: Option<(EvaluationNode, Vec<EvalStep>)>,
-    theorem: Option<(ImplicationNode, Vec<ProofStep>)>,
-
-    mapping: HashMap<EvaluationNode, Vec<EvalStep>>,
+    stack: Vec<InteractiveItem>,
+    proven: HashSet<ImplicationNode>, // which theorems have been proven
+    proof_stack: Vec<Vec<ImplicationNode>>, // the theorems that need to be proven for the current
+                                      // evaluation/theorem to call `next` or `end` on
 }
 
 impl InteractiveSolver {
@@ -120,15 +127,27 @@ impl InteractiveSolver {
             theorems: Vec::new(),
             term: Term::stdout(),
             theme: ColorfulTheme::default(),
+            stack: Vec::new(),
+            proven: HashSet::new(),
+            proof_stack: Vec::new(),
+        }
+    }
 
-            evaluation: None,
-            theorem: None,
-            mapping: HashMap::new(),
+    fn can_step(&self) -> bool {
+        if let Some(_) = self.stack.last() {
+            let need_proof = self.proof_stack.last().cloned().unwrap_or_default();
+            let can_step = need_proof
+                .iter()
+                .all(|theorem| self.proven.contains(theorem));
+
+            can_step
+        } else {
+            false
         }
     }
 
     fn read_begin(&mut self) -> Result<(), CroofShellError> {
-        if self.evaluations.is_empty() {
+        if self.evaluations.is_empty() && self.theorems.is_empty() {
             return Err(CroofShellError::InvalidCommand(
                 "No evaluations available to begin.".to_string(),
             ));
@@ -138,11 +157,13 @@ impl InteractiveSolver {
             .evaluations
             .iter()
             .map(|eval| format!("(E) {}", eval))
-            .chain(
-                self.theorems
-                    .iter()
-                    .map(|theorem| format!("(T) {}", theorem)),
-            )
+            .chain(self.theorems.iter().map(|theorem| {
+                if self.proven.contains(theorem) {
+                    format!("(T) {} (proven)", theorem)
+                } else {
+                    format!("(T) {}", theorem)
+                }
+            }))
             .chain(std::iter::once("Cancel".to_string()))
             .collect();
 
@@ -159,14 +180,18 @@ impl InteractiveSolver {
 
         if selection < self.evaluations.len() {
             let evaluation = self.evaluations[selection].clone();
-            self.evaluation = Some((evaluation.clone(), vec![]));
-            self.theorem = None;
+            self.stack.push(InteractiveItem::Evaluation((
+                evaluation.clone(),
+                vec![],
+                vec![],
+            )));
         } else {
             let theorem_index = selection - self.evaluations.len();
             let theorem = self.theorems[theorem_index].clone();
-            self.evaluation = None;
-            self.theorem = Some((theorem.clone(), vec![]));
+            self.stack
+                .push(InteractiveItem::Theorem((theorem.clone(), vec![], vec![])));
         }
+        self.proof_stack.push(vec![]);
 
         Ok(())
     }
@@ -195,20 +220,34 @@ impl InteractiveSolver {
 
         self.implications.extend(program.implications.clone());
         self.evaluations.extend(program.evaluations.clone());
+        self.theorems.extend(program.theorems.clone());
 
         self.term
             .write_line(&format!(
-                "Parsed and added {} implications and {} evaluations.",
+                "Parsed and added {} implications, {} evaluations and {} theorems.",
                 program.implications.len(),
-                program.evaluations.len()
+                program.evaluations.len(),
+                program.theorems.len(),
             ))
             .map_err(CroofShellError::IoError)?;
 
         return Ok(());
     }
 
-    fn read_next_evaluation(&mut self) -> Result<(), CroofShellError> {
-        let (evaluation, mut history) = self.evaluation.clone().unwrap();
+    fn read_next_evaluation(
+        &mut self,
+        evaluation: EvaluationNode,
+        history: Vec<EvalStep>,
+        history_p: Vec<usize>,
+    ) -> Result<(), CroofShellError> {
+        if !self.can_step() {
+            return Err(CroofShellError::InvalidCommand(
+                "Cannot step, some theorems need to be proven first.".to_string(),
+            ));
+        }
+
+        let mut history = history;
+        let mut history_p = history_p;
 
         let mut options = Vec::new();
 
@@ -319,24 +358,66 @@ impl InteractiveSolver {
 
         let (substitution, steps) = &substitutions[selection];
 
+        let mut need_proof = vec![];
         for step in steps {
             let theorem = ImplicationNode::new(evaluation.conditions.clone(), vec![step.clone()]);
 
-            self.theorems.push(theorem.clone());
+            need_proof.push(theorem.clone());
+        }
+        self.theorems.extend(need_proof.clone());
+
+        if !need_proof.is_empty() {
+            self.term
+                .write_line(&format!("The evaluation requires proof of:"))
+                .map_err(CroofShellError::IoError)?;
+
+            for theorem in &need_proof {
+                self.term
+                    .write_line(&format!(
+                        "  - {}",
+                        theorem
+                            .conclusion
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ))
+                    .map_err(CroofShellError::IoError)?;
+            }
         }
 
-        history.push((evaluation.expression.clone(), substitution.clone(), implication.clone()));
-
-        self.evaluation = Some((EvaluationNode::new(
-            evaluation.conditions.clone(),
+        history.push((
+            evaluation.expression.clone(),
             substitution.clone(),
-        ), history.clone()));
+            implication.clone(),
+        ));
+        history_p.push(need_proof.len());
+
+        let last_index = self.stack.len() - 1;
+        self.stack[last_index] = InteractiveItem::Evaluation((
+            EvaluationNode::new(evaluation.conditions.clone(), substitution.clone()),
+            history.clone(),
+            history_p.clone(),
+        ));
+        self.proof_stack[last_index].extend(need_proof.clone());
 
         Ok(())
     }
 
-    fn read_next_theorem(&mut self) -> Result<(), CroofShellError> {
-        let (theorem, mut history) = self.theorem.clone().unwrap();
+    fn read_next_theorem(
+        &mut self,
+        theorem: ImplicationNode,
+        history: Vec<ProofStep>,
+        history_p: Vec<usize>,
+    ) -> Result<(), CroofShellError> {
+        if !self.can_step() {
+            return Err(CroofShellError::InvalidCommand(
+                "Cannot step, some theorems need to be proven first.".to_string(),
+            ));
+        }
+
+        let mut history = history;
+        let mut history_p = history_p;
 
         let mut options = Vec::new();
 
@@ -350,27 +431,24 @@ impl InteractiveSolver {
             let implication = ImplicationNode::new(others.clone(), vec![condition.clone()]);
 
             let mut substitutions = Vec::new();
-            for conclusion in &theorem.conclusion {
-                match conclusion {
-                    StatementNode::Quantifier(_) => continue,
-                    StatementNode::Relation(node) => {
-                        for (substituted, steps) in
-                            self.matcher.substitute(&node.left, &others, condition)
-                        {
-                            let mut node = node.clone();
-                            node.left = substituted;
-                            substitutions.push((StatementNode::Relation(node.clone()), steps));
-                        }
-
-                        for (substituted, steps) in
-                            self.matcher.substitute(&node.right, &others, condition)
-                        {
-                            let mut node = node.clone();
-                            node.right = substituted;
-                            substitutions.push((StatementNode::Relation(node.clone()), steps));
-                        }
-                    }
-                    StatementNode::Builtin(_) => todo!("Handle built-in statements"),
+            for (i, conclusion) in theorem.conclusion.iter().enumerate() {
+                for (substituted, steps) in
+                    self.matcher
+                        .substitute_statement(&conclusion, &others, condition)
+                {
+                    let conclusions = theorem
+                        .conclusion
+                        .iter()
+                        .enumerate()
+                        .map(|(j, c)| {
+                            if j == i {
+                                substituted.clone()
+                            } else {
+                                c.clone()
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    substitutions.push((conclusions, steps));
                 }
             }
 
@@ -384,31 +462,25 @@ impl InteractiveSolver {
         for implication in &self.implications {
             let mut substitutions = Vec::new();
             for condition in &implication.conclusion {
-                for conclusion in &theorem.conclusion {
-                    match conclusion {
-                        StatementNode::Quantifier(_) => continue,
-                        StatementNode::Relation(node) => {
-                            for (substituted, steps) in self.matcher.substitute(
-                                &node.left,
-                                &implication.conditions,
-                                condition,
-                            ) {
-                                let mut node = node.clone();
-                                node.left = substituted;
-                                substitutions.push((StatementNode::Relation(node.clone()), steps));
-                            }
-
-                            for (substituted, steps) in self.matcher.substitute(
-                                &node.right,
-                                &implication.conditions,
-                                condition,
-                            ) {
-                                let mut node = node.clone();
-                                node.right = substituted;
-                                substitutions.push((StatementNode::Relation(node.clone()), steps));
-                            }
-                        }
-                        StatementNode::Builtin(_) => todo!("Handle built-in statements"),
+                for (i, conclusion) in theorem.conclusion.iter().enumerate() {
+                    for (substituted, steps) in self.matcher.substitute_statement(
+                        &conclusion,
+                        &implication.conditions,
+                        condition,
+                    ) {
+                        let conclusions = theorem
+                            .conclusion
+                            .iter()
+                            .enumerate()
+                            .map(|(j, c)| {
+                                if j == i {
+                                    substituted.clone()
+                                } else {
+                                    c.clone()
+                                }
+                            })
+                            .collect::<Vec<_>>();
+                        substitutions.push((conclusions, steps));
                     }
                 }
             }
@@ -454,13 +526,18 @@ impl InteractiveSolver {
         let choices: Vec<String> = substitutions
             .iter()
             .map(|(substitution, steps)| {
+                let substitution_text = substitution
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 if steps.is_empty() {
-                    return format!("{}", substitution);
+                    return format!("{}", substitution_text);
                 }
 
                 format!(
                     "{} (where {})",
-                    substitution,
+                    substitution_text,
                     steps
                         .iter()
                         .map(|statement| format!("{}", statement))
@@ -484,27 +561,62 @@ impl InteractiveSolver {
 
         let (substitution, steps) = &substitutions[selection];
 
+        let mut need_proof = vec![];
         for step in steps {
             let theorem = ImplicationNode::new(theorem.conditions.clone(), vec![step.clone()]);
 
-            self.theorems.push(theorem.clone());
+            need_proof.push(theorem.clone());
+        }
+        self.theorems.extend(need_proof.clone());
+
+        if !need_proof.is_empty() {
+            self.term
+                .write_line(&format!("The theorem requires proof of:"))
+                .map_err(CroofShellError::IoError)?;
+
+            for theorem in &need_proof {
+                self.term
+                    .write_line(&format!(
+                        "  - {}",
+                        theorem
+                            .conclusion
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ))
+                    .map_err(CroofShellError::IoError)?;
+            }
         }
 
-        history.push((theorem.conclusion.clone(), vec![substitution.clone()], implication.clone()));
+        history.push((
+            theorem.conclusion.clone(),
+            substitution.clone(),
+            implication.clone(),
+        ));
+        history_p.push(need_proof.len());
 
-        self.theorem = Some((ImplicationNode::new(
-            theorem.conditions.clone(),
-            vec![substitution.clone()],
-        ), history.clone()));
+        let last_index = self.stack.len() - 1;
+        self.stack[last_index] = InteractiveItem::Theorem((
+            ImplicationNode::new(theorem.conditions.clone(), substitution.clone()),
+            history.clone(),
+            history_p.clone(),
+        ));
+        self.proof_stack[last_index].extend(need_proof.clone());
 
         Ok(())
     }
 
     fn read_next(&mut self) -> Result<(), CroofShellError> {
-        if self.evaluation.is_some() {
-            return self.read_next_evaluation();
-        } else if self.theorem.is_some() {
-            return self.read_next_theorem();
+        if let Some(item) = self.stack.last().cloned() {
+            match item {
+                InteractiveItem::Evaluation((evaluation, history, history_p)) => {
+                    return self.read_next_evaluation(evaluation, history, history_p);
+                }
+                InteractiveItem::Theorem((theorem, history, history_p)) => {
+                    return self.read_next_theorem(theorem, history, history_p);
+                }
+            }
         } else {
             return Err(CroofShellError::InvalidCommand(
                 "No evaluation or theorem selected. Please begin with an evaluation or theorem."
@@ -513,8 +625,14 @@ impl InteractiveSolver {
         }
     }
 
-    fn read_back_evaluation(&mut self) -> Result<(), CroofShellError> {
-        let (evaluation, mut history) = self.evaluation.clone().unwrap();
+    fn read_back_evaluation(
+        &mut self,
+        evaluation: EvaluationNode,
+        history: Vec<EvalStep>,
+        history_p: Vec<usize>,
+    ) -> Result<(), CroofShellError> {
+        let mut history = history;
+        let mut history_p = history_p;
 
         if history.is_empty() {
             self.term
@@ -524,11 +642,20 @@ impl InteractiveSolver {
         }
 
         let last_step = history.pop().unwrap();
+        let last_p = history_p.pop().unwrap();
 
-        self.evaluation = Some((EvaluationNode::new(
-            evaluation.conditions.clone(),
-            last_step.0.clone(),
-        ), history));
+        let last_index = self.stack.len() - 1;
+        self.stack[last_index] = InteractiveItem::Evaluation((
+            EvaluationNode::new(evaluation.conditions.clone(), last_step.0.clone()),
+            history,
+            history_p,
+        ));
+        let take_len = self.proof_stack[last_index].len().saturating_sub(last_p);
+        self.proof_stack[last_index] = self.proof_stack[last_index]
+            .iter()
+            .take(take_len)
+            .cloned()
+            .collect();
 
         self.term
             .write_line(&format!(
@@ -540,8 +667,14 @@ impl InteractiveSolver {
         Ok(())
     }
 
-    fn read_back_theorem(&mut self) -> Result<(), CroofShellError> {
-        let (theorem, mut history) = self.theorem.clone().unwrap();
+    fn read_back_theorem(
+        &mut self,
+        theorem: ImplicationNode,
+        history: Vec<ProofStep>,
+        history_p: Vec<usize>,
+    ) -> Result<(), CroofShellError> {
+        let mut history = history;
+        let mut history_p = history_p;
 
         if history.is_empty() {
             self.term
@@ -551,16 +684,30 @@ impl InteractiveSolver {
         }
 
         let last_step = history.pop().unwrap();
+        let last_p = history_p.pop().unwrap();
 
-        self.theorem = Some((ImplicationNode::new(
-            theorem.conditions.clone(),
-            last_step.0.clone(),
-        ), history));
+        let last_index = self.stack.len() - 1;
+        self.stack[last_index] = InteractiveItem::Theorem((
+            ImplicationNode::new(theorem.conditions.clone(), last_step.0.clone()),
+            history,
+            history_p,
+        ));
+        let take_len = self.proof_stack[last_index].len().saturating_sub(last_p);
+        self.proof_stack[last_index] = self.proof_stack[last_index]
+            .iter()
+            .take(take_len)
+            .cloned()
+            .collect();
 
         self.term
             .write_line(&format!(
                 "Backtracked to step: {} with implication: {}",
-                last_step.0.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", "),
+                last_step
+                    .0
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
                 last_step.2
             ))
             .map_err(CroofShellError::IoError)?;
@@ -569,10 +716,15 @@ impl InteractiveSolver {
     }
 
     fn read_back(&mut self) -> Result<(), CroofShellError> {
-        if self.evaluation.is_some() {
-            return self.read_back_evaluation();
-        } else if self.theorem.is_some() {
-            return self.read_back_theorem();
+        if let Some(item) = self.stack.last().cloned() {
+            match item {
+                InteractiveItem::Evaluation((evaluation, history, history_p)) => {
+                    return self.read_back_evaluation(evaluation, history, history_p);
+                }
+                InteractiveItem::Theorem((theorem, history, history_p)) => {
+                    return self.read_back_theorem(theorem, history, history_p);
+                }
+            }
         } else {
             return Err(CroofShellError::InvalidCommand(
                 "No evaluation or theorem selected. Please begin with an evaluation or theorem."
@@ -581,87 +733,328 @@ impl InteractiveSolver {
         }
     }
 
-    fn read_end_evaluation(&mut self) -> Result<(), CroofShellError> {
-        if let Some((evaluation, history)) = self.evaluation.take() {
+    fn read_end_evaluation(
+        &mut self,
+        evaluation: EvaluationNode,
+        history: Vec<EvalStep>,
+    ) -> Result<(), CroofShellError> {
+        if !self.can_step() {
             self.term
-                .write_line(&format!(
-                    "Evaluation completed with {} steps.",
-                    history.len()
-                ))
+                .write_line(&format!("The evaluation requires proof of:"))
                 .map_err(CroofShellError::IoError)?;
 
-            let original = history.first().map_or(
-                evaluation.expression.clone(),
-                |(parent, _, _)| parent.clone(),
-            );
-
-            self.term
-                .write_line(&format!("Expression: {}", original))
-                .map_err(CroofShellError::IoError)?;
-
-            for (parent, target, implication) in history {
+            for theorem in self.proof_stack.last().unwrap() {
                 self.term
                     .write_line(&format!(
-                        "  - {} => {} (apply {})",
-                        parent, target, implication
+                        "  - {}",
+                        theorem
+                            .conclusion
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     ))
                     .map_err(CroofShellError::IoError)?;
             }
 
-            self.term
-                .write_line(&format!("Result: {}", evaluation.expression))
-                .map_err(CroofShellError::IoError)?;
-
-            Ok(())
-        } else {
-            Err(CroofShellError::InvalidCommand(
-                "No evaluation in progress.".to_string(),
-            ))
+            return Err(CroofShellError::InvalidCommand(
+                "Cannot end, some theorems need to be proven first.".to_string(),
+            ));
         }
+
+        self.term
+            .write_line(&format!(
+                "Evaluation completed with {} steps.",
+                history.len()
+            ))
+            .map_err(CroofShellError::IoError)?;
+
+        let original = history
+            .first()
+            .map_or(evaluation.expression.clone(), |(parent, _, _)| {
+                parent.clone()
+            });
+
+        self.term
+            .write_line(&format!("Expression: {}", original))
+            .map_err(CroofShellError::IoError)?;
+
+        for (parent, target, implication) in history {
+            self.term
+                .write_line(&format!(
+                    "  - {} => {} (apply {})",
+                    parent, target, implication
+                ))
+                .map_err(CroofShellError::IoError)?;
+        }
+
+        self.term
+            .write_line(&format!("Result: {}", evaluation.expression))
+            .map_err(CroofShellError::IoError)?;
+
+        self.stack.pop();
+        self.proof_stack.pop();
+
+        Ok(())
     }
 
-    fn read_end_theorem(&mut self) -> Result<(), CroofShellError> {
-        if let Some((theorem, history)) = self.theorem.take() {
+    fn read_end_theorem(
+        &mut self,
+        theorem: ImplicationNode,
+        history: Vec<ProofStep>,
+    ) -> Result<(), CroofShellError> {
+        if !self.can_step() {
             self.term
-                .write_line(&format!(
-                    "Theorem completed with {} steps.",
-                    history.len()
-                ))
+                .write_line(&format!("The theorem requires proof of:"))
                 .map_err(CroofShellError::IoError)?;
 
-            let original = history.first().map_or(
-                theorem.conclusion.clone(),
-                |(parent, _, _)| parent.clone(),
-            );
-
-            self.term
-                .write_line(&format!("Theorem: {}", original.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", ")))
-                .map_err(CroofShellError::IoError)?;
-
-            for (target, steps, implication) in history {
+            for theorem in self.proof_stack.last().unwrap() {
                 self.term
                     .write_line(&format!(
-                        "  - {} => {} (apply {})",
-                        target.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", "),
-                        steps.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", "),
-                        implication
+                        "  - {}",
+                        theorem
+                            .conclusion
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     ))
                     .map_err(CroofShellError::IoError)?;
             }
 
-            Ok(())
-        } else {
-            Err(CroofShellError::InvalidCommand(
-                "No theorem in progress.".to_string(),
-            ))
+            return Err(CroofShellError::InvalidCommand(
+                "Cannot end, some theorems need to be proven first.".to_string(),
+            ));
         }
+
+        if !theorem.conclusion.iter().all(|s| s.holds()) {
+            return Err(CroofShellError::InvalidCommand(
+                "The theorem has not been proven yet.".to_string(),
+            ));
+        }
+
+        self.term
+            .write_line(&format!("Theorem completed with {} steps.", history.len()))
+            .map_err(CroofShellError::IoError)?;
+
+        let original = history
+            .first()
+            .map_or(theorem.conclusion.clone(), |(parent, _, _)| parent.clone());
+
+        let original_theorem = ImplicationNode::new(theorem.conditions.clone(), original.clone());
+        self.proven.insert(original_theorem.clone());
+
+        self.term
+            .write_line(&format!(
+                "Theorem: {}",
+                original
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))
+            .map_err(CroofShellError::IoError)?;
+
+        for (target, steps, implication) in history {
+            let steps = if steps.is_empty() {
+                "qed".to_string()
+            } else {
+                steps
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            self.term
+                .write_line(&format!(
+                    "  - {} => {} (apply {})",
+                    target
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    steps,
+                    implication
+                ))
+                .map_err(CroofShellError::IoError)?;
+        }
+
+        self.stack.pop();
+        self.proof_stack.pop();
+
+        Ok(())
     }
 
     fn read_end(&mut self) -> Result<(), CroofShellError> {
-        if self.evaluation.is_some() {
-            return self.read_end_evaluation();
-        } else if self.theorem.is_some() {
-            return self.read_end_theorem();
+        if let Some(item) = self.stack.last().cloned() {
+            match item {
+                InteractiveItem::Evaluation((evaluation, history, _)) => {
+                    return self.read_end_evaluation(evaluation, history);
+                }
+                InteractiveItem::Theorem((theorem, history, _)) => {
+                    return self.read_end_theorem(theorem, history);
+                }
+            }
+        } else {
+            return Err(CroofShellError::InvalidCommand(
+                "No evaluation or theorem selected. Please begin with an evaluation or theorem."
+                    .to_string(),
+            ));
+        }
+    }
+
+    fn read_show_evaluation(
+        &mut self,
+        evaluation: EvaluationNode,
+        history: Vec<EvalStep>,
+    ) -> Result<(), CroofShellError> {
+        let original = history
+            .first()
+            .map_or(evaluation.expression.clone(), |(parent, _, _)| {
+                parent.clone()
+            });
+
+        self.term
+            .write_line(&format!("Expression: {}", original))
+            .map_err(CroofShellError::IoError)?;
+
+        for (parent, target, implication) in history {
+            self.term
+                .write_line(&format!(
+                    "  - {} => {} (apply {})",
+                    parent, target, implication
+                ))
+                .map_err(CroofShellError::IoError)?;
+        }
+
+        if !self.proof_stack.last().unwrap().is_empty() {
+            self.term
+                .write_line(&format!("The evaluation requires proof of:"))
+                .map_err(CroofShellError::IoError)?;
+
+            for theorem in self.proof_stack.last().unwrap() {
+                if self.proven.contains(theorem) {
+                    self.term
+                        .write_line(&format!(
+                            "  - {} (proven)",
+                            theorem
+                                .conclusion
+                                .iter()
+                                .map(|s| s.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ))
+                        .map_err(CroofShellError::IoError)?;
+                } else {
+                    self.term
+                        .write_line(&format!(
+                            "  - {}",
+                            theorem
+                                .conclusion
+                                .iter()
+                                .map(|s| s.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ))
+                        .map_err(CroofShellError::IoError)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn read_show_theorem(
+        &mut self,
+        theorem: ImplicationNode,
+        history: Vec<ProofStep>,
+    ) -> Result<(), CroofShellError> {
+        let original = history
+            .first()
+            .map_or(theorem.conclusion.clone(), |(parent, _, _)| parent.clone());
+
+        self.term
+            .write_line(&format!(
+                "Theorem: {}",
+                original
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))
+            .map_err(CroofShellError::IoError)?;
+
+        for (target, steps, implication) in history {
+            let steps = if steps.is_empty() {
+                "qed".to_string()
+            } else {
+                steps
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            self.term
+                .write_line(&format!(
+                    "  - {} => {} (apply {})",
+                    target
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    steps,
+                    implication
+                ))
+                .map_err(CroofShellError::IoError)?;
+        }
+
+        if !self.proof_stack.last().unwrap().is_empty() {
+            self.term
+                .write_line(&format!("The theorem requires proof of:"))
+                .map_err(CroofShellError::IoError)?;
+
+            for theorem in self.proof_stack.last().unwrap() {
+                if self.proven.contains(theorem) {
+                    self.term
+                        .write_line(&format!(
+                            "  - {} (proven)",
+                            theorem
+                                .conclusion
+                                .iter()
+                                .map(|s| s.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ))
+                        .map_err(CroofShellError::IoError)?;
+                } else {
+                    self.term
+                        .write_line(&format!(
+                            "  - {}",
+                            theorem
+                                .conclusion
+                                .iter()
+                                .map(|s| s.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ))
+                        .map_err(CroofShellError::IoError)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn read_show(&mut self) -> Result<(), CroofShellError> {
+        if let Some(item) = self.stack.last().cloned() {
+            match item {
+                InteractiveItem::Evaluation((evaluation, history, _)) => {
+                    return self.read_show_evaluation(evaluation, history);
+                }
+                InteractiveItem::Theorem((theorem, history, _)) => {
+                    return self.read_show_theorem(theorem, history);
+                }
+            }
         } else {
             return Err(CroofShellError::InvalidCommand(
                 "No evaluation or theorem selected. Please begin with an evaluation or theorem."
@@ -688,6 +1081,9 @@ impl InteractiveSolver {
             .map_err(CroofShellError::IoError)?;
         self.term
             .write_line("  back - Move back to the previous step in the solving process")
+            .map_err(CroofShellError::IoError)?;
+        self.term
+            .write_line("  show - Shows you the current evaluation/theorem and also the steps")
             .map_err(CroofShellError::IoError)?;
         self.term
             .write_line("  . - End the input and return to read mode")
@@ -717,6 +1113,7 @@ impl InteractiveSolver {
                 END => return self.read_end(),
                 NEXT => return self.read_next(),
                 BACK => return self.read_back(),
+                SHOW => return self.read_show(),
                 _ => {}
             }
 
@@ -727,7 +1124,7 @@ impl InteractiveSolver {
     pub fn interact(&mut self) -> Result<(), CroofShellError> {
         loop {
             match self.read_item() {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(err) => {
                     self.term
                         .write_line(&format!("Error: {}", err))

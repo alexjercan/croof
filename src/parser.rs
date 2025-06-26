@@ -448,6 +448,7 @@ impl Parser {
     /// source code.
     pub fn parse(&mut self) -> Result<ProgramNode, ParserError> {
         let mut defines = Vec::new();
+        let mut theorems = Vec::new();
         let mut implications = Vec::new();
         let mut evaluations = Vec::new();
 
@@ -459,6 +460,12 @@ impl Parser {
                     let eval = self.parse_evaluation()?;
 
                     evaluations.push(eval);
+                }
+                TokenKind::Proof => {
+                    self.read();
+                    let implication = self.parse_implication()?;
+
+                    theorems.push(implication);
                 }
                 TokenKind::Def => {
                     self.read();
@@ -474,6 +481,6 @@ impl Parser {
             }
         }
 
-        Ok(ProgramNode::new(defines, implications, evaluations))
+        Ok(ProgramNode::new(defines, implications, evaluations, theorems))
     }
 }

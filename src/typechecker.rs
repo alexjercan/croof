@@ -957,6 +957,10 @@ impl Typechecker {
             errors.extend(self.check_evaluation(eval));
         }
 
+        for theorem in &mut program.theorems {
+            errors.extend(self.check_implication(theorem));
+        }
+
         errors
     }
 }

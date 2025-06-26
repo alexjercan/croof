@@ -38,6 +38,7 @@ pub enum TokenKind {
     Forall,
     Exists,
     Eval,
+    Proof,
     Def,
 }
 

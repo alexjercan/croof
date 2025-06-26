@@ -24,7 +24,7 @@ use crate::token::{Token, TokenKind};
 /// ```croof
 /// N -> N -> N
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub struct TypeNode {
     pub types: Vec<Token>,
 }
@@ -115,7 +115,7 @@ impl Display for QuantifierNode {
 /// {1, 2, 3}
 /// {f(1), g(2)}
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub struct SetNode {
     pub elements: Vec<ExpressionNode>,
 }
@@ -175,23 +175,17 @@ impl NumberNode {
 
 impl PartialOrd for NumberNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for NumberNode {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let type_node = self.node_type.as_ref().unwrap().first().unwrap().clone();
-        let type_other = other.node_type.as_ref().unwrap().first().unwrap().clone();
+        let type_node = self.node_type.as_ref()?.first()?.clone();
+        let type_other = other.node_type.as_ref()?.first()?.clone();
 
         if type_node == type_other {
-            let number_node = self.value.value().parse::<i64>().unwrap();
-            let other_node = other.value.value().parse::<i64>().unwrap();
+            let number_node = self.value.value().parse::<i64>().ok()?;
+            let other_node = other.value.value().parse::<i64>().ok()?;
 
-            return number_node.cmp(&other_node);
+            return number_node.partial_cmp(&other_node);
         }
 
-        type_node.cmp(&type_other)
+        type_node.partial_cmp(&type_other)
     }
 }
 
@@ -258,20 +252,14 @@ impl LiteralNode {
 
 impl PartialOrd for LiteralNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for LiteralNode {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let type_node = self.node_type.as_ref().unwrap().first().unwrap().clone();
-        let type_other = other.node_type.as_ref().unwrap().first().unwrap().clone();
+        let type_node = self.node_type.as_ref()?.first()?.clone();
+        let type_other = other.node_type.as_ref()?.first()?.clone();
 
         if type_node == type_other {
-            return self.value.value().cmp(&other.value.value());
+            return self.value.value().partial_cmp(&other.value.value());
         }
 
-        type_node.cmp(&type_other)
+        type_node.partial_cmp(&type_other)
     }
 }
 
@@ -344,20 +332,14 @@ impl BindingNode {
 
 impl PartialOrd for BindingNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for BindingNode {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let type_node = self.node_type.as_ref().unwrap().first().unwrap().clone();
-        let type_other = other.node_type.as_ref().unwrap().first().unwrap().clone();
+        let type_node = self.node_type.as_ref()?.first()?.clone();
+        let type_other = other.node_type.as_ref()?.first()?.clone();
 
         if type_node == type_other {
-            return self.name.value().cmp(&other.name.value());
+            return self.name.value().partial_cmp(&other.name.value());
         }
 
-        type_node.cmp(&type_other)
+        type_node.partial_cmp(&type_other)
     }
 }
 
@@ -444,20 +426,14 @@ impl OperatorNode {
 
 impl PartialOrd for OperatorNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for OperatorNode {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let type_node = self.node_type.as_ref().unwrap().first().unwrap().clone();
-        let type_other = other.node_type.as_ref().unwrap().first().unwrap().clone();
+        let type_node = self.node_type.as_ref()?.first()?.clone();
+        let type_other = other.node_type.as_ref()?.first()?.clone();
 
         if type_node == type_other {
-            return self.operator.value().cmp(&other.operator.value());
+            return self.operator.value().partial_cmp(&other.operator.value());
         }
 
-        type_node.cmp(&type_other)
+        type_node.partial_cmp(&type_other)
     }
 }
 
@@ -532,20 +508,14 @@ impl ParenNode {
 
 impl PartialOrd for ParenNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for ParenNode {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let type_node = self.node_type.as_ref().unwrap().first().unwrap().clone();
-        let type_other = other.node_type.as_ref().unwrap().first().unwrap().clone();
+        let type_node = self.node_type.as_ref()?.first()?.clone();
+        let type_other = other.node_type.as_ref()?.first()?.clone();
 
         if type_node == type_other {
-            return self.expression.cmp(&other.expression);
+            return self.expression.partial_cmp(&other.expression);
         }
 
-        type_node.cmp(&type_other)
+        type_node.partial_cmp(&type_other)
     }
 }
 
@@ -580,7 +550,7 @@ impl Display for ParenNode {
 
 /// The ExpressionNode enum represents different types of expression nodes in the abstract syntax
 /// tree.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ExpressionNode {
     Set(SetNode),
     Type(TypeNode),
@@ -589,6 +559,21 @@ pub enum ExpressionNode {
     Binding(BindingNode),
     Operator(OperatorNode),
     Paren(ParenNode),
+}
+
+impl PartialOrd for ExpressionNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (ExpressionNode::Set(set1), ExpressionNode::Set(set2)) => set1.partial_cmp(set2),
+            (ExpressionNode::Type(type1), ExpressionNode::Type(type2)) => type1.partial_cmp(type2),
+            (ExpressionNode::Number(num1), ExpressionNode::Number(num2)) => num1.partial_cmp(num2),
+            (ExpressionNode::Literal(lit1), ExpressionNode::Literal(lit2)) => lit1.partial_cmp(lit2),
+            (ExpressionNode::Binding(bind1), ExpressionNode::Binding(bind2)) => bind1.partial_cmp(bind2),
+            (ExpressionNode::Operator(op1), ExpressionNode::Operator(op2)) => op1.partial_cmp(op2),
+            (ExpressionNode::Paren(paren1), ExpressionNode::Paren(paren2)) => paren1.partial_cmp(paren2),
+            _ => None,
+        }
+    }
 }
 
 impl ExpressionNode {
@@ -919,6 +904,27 @@ impl RelationNode {
             right,
         }
     }
+
+    pub fn create_mapping(
+        &self,
+        relation: &RelationNode,
+    ) -> Option<HashMap<ExpressionNode, ExpressionNode>> {
+        let mut mapping = HashMap::new();
+
+        if self.kind == relation.kind
+            && self.token == relation.token
+            && self
+                .left
+                .create_mapping_helper(&relation.left, &mut mapping)
+            && self
+                .right
+                .create_mapping_helper(&relation.right, &mut mapping)
+        {
+            Some(mapping)
+        } else {
+            None
+        }
+    }
 }
 
 impl Display for RelationNode {
@@ -995,6 +1001,45 @@ pub enum StatementNode {
     Quantifier(QuantifierNode),
     Relation(RelationNode),
     Builtin(BuiltinNode),
+}
+
+impl StatementNode {
+    pub fn create_mapping(
+        &self,
+        statement: &StatementNode,
+    ) -> Option<HashMap<ExpressionNode, ExpressionNode>> {
+        match (self, statement) {
+            (StatementNode::Quantifier(a), StatementNode::Quantifier(b)) => {
+                if a.symbol == b.symbol && a.type_node == b.type_node {
+                    Some(HashMap::new())
+                } else {
+                    None
+                }
+            }
+            (StatementNode::Relation(a), StatementNode::Relation(b)) => a.create_mapping(b),
+            (StatementNode::Builtin(a), StatementNode::Builtin(b)) => {
+                if a.display == b.display {
+                    Some(HashMap::new())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub fn holds(&self) -> bool {
+        match self {
+            StatementNode::Relation(node) => {
+                match &node.kind {
+                    RelationKind::Equality => node.left == node.right,
+                    RelationKind::GreaterThan => node.left > node.right,
+                }
+            }
+            StatementNode::Quantifier(_) => true,
+            StatementNode::Builtin(_) => todo!("Handle built-in statements"),
+        }
+    }
 }
 
 impl Display for StatementNode {
@@ -1215,6 +1260,7 @@ pub struct ProgramNode {
     pub defines: Vec<DefineNode>,
     pub implications: Vec<ImplicationNode>,
     pub evaluations: Vec<EvaluationNode>,
+    pub theorems: Vec<ImplicationNode>,
 }
 
 impl ProgramNode {
@@ -1223,11 +1269,13 @@ impl ProgramNode {
         defines: Vec<DefineNode>,
         implications: Vec<ImplicationNode>,
         evaluations: Vec<EvaluationNode>,
+        theorems: Vec<ImplicationNode>,
     ) -> Self {
         ProgramNode {
             defines,
             implications,
             evaluations,
+            theorems,
         }
     }
 
@@ -1244,6 +1292,7 @@ impl ProgramNode {
         self.defines.extend(other.defines);
         self.implications.extend(other.implications);
         self.evaluations.extend(other.evaluations);
+        self.theorems.extend(other.theorems);
     }
 }
 
