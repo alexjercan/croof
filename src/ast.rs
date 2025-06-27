@@ -1210,7 +1210,7 @@ impl Display for DefineNode {
 /// ```croof
 /// eval f(x) = x => f(0)
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EvaluationNode {
     pub conditions: Vec<StatementNode>,
     pub expression: ExpressionNode,

@@ -41,13 +41,13 @@
 
 use console::Term;
 use dialoguer::{theme::ColorfulTheme, Select};
-use std::{collections::HashSet, fmt::Display, io};
+use std::{collections::{HashMap, HashSet}, fmt::Display, io};
 
 use crate::{
-    ast::{EvaluationNode, ImplicationNode},
+    ast::{EvaluationNode, ExpressionNode, ImplicationNode, RelationKind, RelationNode, StatementNode},
     matcher::Matcher,
     parser::{Parser, ParserError},
-    prelude::{SourceMap, Typechecker, TypecheckerError},
+    prelude::{SourceMap, Typechecker, TypecheckerError}, token::{Token, TokenKind},
 };
 
 use super::{EvalStep, ProofStep};
@@ -101,6 +101,7 @@ pub struct InteractiveSolver {
     matcher: Matcher,
     implications: Vec<ImplicationNode>,
     evaluations: Vec<EvaluationNode>,
+    solutions: HashMap<EvaluationNode, ExpressionNode>,
     theorems: Vec<ImplicationNode>,
     term: Term,
     theme: ColorfulTheme,
@@ -124,6 +125,7 @@ impl InteractiveSolver {
             matcher,
             implications,
             evaluations: Vec::new(),
+            solutions: HashMap::new(),
             theorems: Vec::new(),
             term: Term::stdout(),
             theme: ColorfulTheme::default(),
@@ -156,7 +158,13 @@ impl InteractiveSolver {
         let choices: Vec<String> = self
             .evaluations
             .iter()
-            .map(|eval| format!("(E) {}", eval))
+            .map(|eval| {
+                if let Some(solution) = self.solutions.get(eval) {
+                    format!("(E) {} = {}", eval, solution)
+                } else {
+                    format!("(E) {}", eval)
+                }
+            })
             .chain(self.theorems.iter().map(|theorem| {
                 if self.proven.contains(theorem) {
                     format!("(T) {} (proven)", theorem)
@@ -774,6 +782,15 @@ impl InteractiveSolver {
             .map_or(evaluation.expression.clone(), |(parent, _, _)| {
                 parent.clone()
             });
+        let conclusion = StatementNode::Relation(RelationNode::new(
+            RelationKind::Equality,
+            Token::new(TokenKind::Equal),
+            original.clone(),
+            evaluation.expression.clone(),
+        ));
+        let original_theorem = ImplicationNode::new(evaluation.conditions.clone(), vec![conclusion]);
+        self.implications.push(original_theorem.clone());
+        self.solutions.insert(EvaluationNode::new(evaluation.conditions.clone(), original.clone()), evaluation.expression.clone());
 
         self.term
             .write_line(&format!("Expression: {}", original))
@@ -843,6 +860,7 @@ impl InteractiveSolver {
 
         let original_theorem = ImplicationNode::new(theorem.conditions.clone(), original.clone());
         self.proven.insert(original_theorem.clone());
+        self.implications.push(original_theorem.clone());
 
         self.term
             .write_line(&format!(
