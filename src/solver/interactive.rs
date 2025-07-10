@@ -1110,7 +1110,7 @@ impl InteractiveSolver {
     }
 
     fn read_item(&mut self) -> Result<(), CroofShellError> {
-        let mut input = String::new();
+        let mut lines = Vec::new();
         loop {
             let line = self
                 .term
@@ -1120,9 +1120,9 @@ impl InteractiveSolver {
                 .to_string();
 
             if let Some((start, _)) = line.split_once('.') {
-                input.push_str(start);
+                lines.push(start.to_string());
 
-                return self.read_parsed(input);
+                return self.read_parsed(lines.join("\n"));
             }
 
             match line.as_str() {
@@ -1135,7 +1135,7 @@ impl InteractiveSolver {
                 _ => {}
             }
 
-            input.push_str(&line);
+            lines.push(line);
         }
     }
 
